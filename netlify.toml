@@ -11,6 +11,6 @@
 
 [[redirects]]
   from = "/api/sliders/*"
-  to = "/.netlify/functions/slider-get?id=:splat"
+  to = "/.netlify/functions/slider-get/:splat"
   status = 200
   force = true

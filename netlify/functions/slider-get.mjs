@@ -1,5 +1,5 @@
 // Slider Bit — fetch a published slider's config + images by ID.
-// GET /api/sliders/:id  (redirected to this function by netlify.toml, id passed as ?id=)
+// GET /api/sliders/:id  (redirected to this function by netlify.toml, id passed as a path segment)
 // Response: { config: object, images: [{ src, alt }], updatedAt: string }
 //
 // This is called cross-origin from whatever site embeds the slider (e.g. a
@@ -31,7 +31,16 @@ export default async (req) => {
   }
 
   const url = new URL(req.url);
-  const id = url.searchParams.get('id');
+
+  // Netlify's :splat redirect placeholder doesn't reliably survive as a query
+  // string value when redirecting to a function, so netlify.toml passes it as
+  // a path segment instead (/.netlify/functions/slider-get/<id>). We read it
+  // from there, falling back to ?id=... for direct/manual calls.
+  let id = url.searchParams.get('id');
+  if (!id) {
+    const match = url.pathname.match(/\/slider-get\/(.+)$/);
+    if (match) id = decodeURIComponent(match[1]);
+  }
 
   if (!id) {
     return json({ error: 'Missing id parameter' }, 400);

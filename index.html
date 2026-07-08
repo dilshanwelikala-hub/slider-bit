@@ -41,6 +41,7 @@
     gap: 1px;
     background: var(--border);
     min-height: calc(100vh - 68px);
+    overflow-x: hidden;
   }
   .panel {
     background: var(--panel);
@@ -133,10 +134,14 @@
     justify-content: center;
     padding: 2rem;
     background: var(--panel);
+    min-width: 0;   /* grid items default to min-width:auto, which lets large images
+                       force this column wider than its track and overflow the page */
+    overflow: hidden;
   }
   .preview-stage {
     width: 100%;
     max-width: 640px;
+    min-width: 0;
   }
   .preview-hint {
     color: var(--text-dim);
@@ -261,7 +266,7 @@
   .copy-btn.copied { background: #a7f3d0; }
 
   /* Live preview slider tweaks so it fits nicely regardless of user theme */
-  .slider-bit { background: #000; }
+  #preview-slider { background: #000; max-width: 100%; }
 </style>
 </head>
 <body>

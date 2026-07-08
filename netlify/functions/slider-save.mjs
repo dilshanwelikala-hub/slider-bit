@@ -1,9 +1,13 @@
 // Slider Bit — save a slider's config + images to Netlify Blobs.
-// POST /api/sliders  (redirected to this function by netlify.toml)
+// POST /api/sliders
 // Body: { id?: string, config: object, images: [{ src, alt }] }
 // Response: { id: string }
 
 import { getStore } from '@netlify/blobs';
+
+export const config = {
+  path: '/api/sliders',
+};
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024; // 8MB safety cap for a handful of base64 images
 

@@ -1,11 +1,20 @@
 // Slider Bit — fetch a published slider's config + images by ID.
-// GET /api/sliders/:id  (redirected to this function by netlify.toml, id passed as a path segment)
+// GET /api/sliders/:id
 // Response: { config: object, images: [{ src, alt }], updatedAt: string }
 //
 // This is called cross-origin from whatever site embeds the slider (e.g. a
 // Webflow site), so it needs permissive CORS.
+//
+// Uses Netlify Functions v2's declarative path routing (URLPattern syntax)
+// instead of a netlify.toml redirect + :splat — the redirect+splat approach
+// doesn't reliably pass values through as query params to functions, but a
+// function-level `path` pattern gives us the id directly via context.params.
 
 import { getStore } from '@netlify/blobs';
+
+export const config = {
+  path: '/api/sliders/:id',
+};
 
 function corsHeaders() {
   return {
@@ -21,7 +30,7 @@ function json(body, status, extraHeaders) {
   });
 }
 
-export default async (req) => {
+export default async (req, context) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders() });
   }
@@ -30,16 +39,13 @@ export default async (req) => {
     return json({ error: 'Method not allowed, use GET' }, 405);
   }
 
-  const url = new URL(req.url);
-
-  // Netlify's :splat redirect placeholder doesn't reliably survive as a query
-  // string value when redirecting to a function, so netlify.toml passes it as
-  // a path segment instead (/.netlify/functions/slider-get/<id>). We read it
-  // from there, falling back to ?id=... for direct/manual calls.
-  let id = url.searchParams.get('id');
+  // context.params.id comes from the ":id" segment in the `path` config above.
+  // Also accept ?id=... as a fallback in case this is ever called without the
+  // path param populated (e.g. certain local-dev setups).
+  let id = context && context.params ? context.params.id : null;
   if (!id) {
-    const match = url.pathname.match(/\/slider-get\/(.+)$/);
-    if (match) id = decodeURIComponent(match[1]);
+    const url = new URL(req.url);
+    id = url.searchParams.get('id');
   }
 
   if (!id) {

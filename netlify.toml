@@ -2,15 +2,6 @@
   publish = "."
   functions = "netlify/functions"
 
-# Friendly API paths -> the actual functions.
-[[redirects]]
-  from = "/api/sliders"
-  to = "/.netlify/functions/slider-save"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/sliders/*"
-  to = "/.netlify/functions/slider-get/:splat"
-  status = 200
-  force = true
+# No redirects needed for the API: slider-save.mjs and slider-get.mjs each
+# declare their own `path` (e.g. "/api/sliders/:id") via Netlify Functions v2's
+# built-in path routing, so they're already reachable at those URLs directly.

@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slider Bit — Webflow Embed Generator</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --border: #2a2e38;
+    --text: #e7e9ee;
+    --text-dim: #9aa1ae;
+    --accent: #6c8cff;
+    --accent-2: #34d399;
+    --danger: #f87171;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header .brand { display: flex; align-items: baseline; gap: 0.5rem; }
+  header h1 { font-size: 1.1rem; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  header h1 span { color: var(--accent); }
+  header p { margin: 0.15rem 0 0; color: var(--text-dim); font-size: 0.82rem; }
+  .layout {
+    display: grid;
+    grid-template-columns: 320px 1fr 340px;
+    gap: 1px;
+    background: var(--border);
+    min-height: calc(100vh - 68px);
+  }
+  .panel {
+    background: var(--panel);
+    padding: 1.25rem;
+    overflow-y: auto;
+    max-height: calc(100vh - 68px);
+  }
+  h2 {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin: 1.25rem 0 0.6rem;
+  }
+  h2:first-child { margin-top: 0; }
+
+  /* Upload */
+  .dropzone {
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    transition: border-color 150ms ease, background 150ms ease;
+  }
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--accent);
+    background: rgba(108,140,255,0.06);
+    color: var(--text);
+  }
+  .dropzone input { display: none; }
+  .thumb-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+  .thumb {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.4rem;
+    cursor: grab;
+  }
+  .thumb.dragging { opacity: 0.4; }
+  .thumb img {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+    border-radius: 6px;
+    flex-shrink: 0;
+  }
+  .thumb .meta { flex: 1; min-width: 0; }
+  .thumb input[type=text] {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid transparent;
+    color: var(--text);
+    font-size: 0.78rem;
+    padding: 2px 0;
+  }
+  .thumb input[type=text]:focus {
+    outline: none;
+    border-bottom-color: var(--accent);
+  }
+  .thumb input[type=text]::placeholder { color: var(--text-dim); }
+  .thumb .remove {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.2rem 0.4rem;
+    line-height: 1;
+  }
+  .thumb .remove:hover { color: var(--danger); }
+  .empty-hint { color: var(--text-dim); font-size: 0.8rem; margin-top: 0.6rem; }
+
+  /* Preview */
+  .preview-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    background: var(--panel);
+  }
+  .preview-stage {
+    width: 100%;
+    max-width: 640px;
+  }
+  .preview-hint {
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    text-align: center;
+    margin-top: 1rem;
+  }
+
+  /* Controls */
+  .field {
+    margin-bottom: 0.75rem;
+  }
+  .field label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-bottom: 0.3rem;
+  }
+  .field input[type=number],
+  .field input[type=text],
+  .field select {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.4rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+  }
+  .field input[type=range] { width: 100%; }
+  .field input[type=color] {
+    width: 100%;
+    height: 32px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px;
+  }
+  .row-check {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.35rem 0;
+    font-size: 0.85rem;
+  }
+  .row-check input { width: 16px; height: 16px; }
+  .sub-field { padding-left: 0; margin-top: -0.2rem; }
+
+  button.primary {
+    width: 100%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    padding: 0.7rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 1rem;
+  }
+  button.primary:hover { filter: brightness(1.08); }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 2rem;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    width: min(720px, 100%);
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .modal-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .modal-header h3 { margin: 0; font-size: 0.95rem; }
+  .modal-header button {
+    background: none; border: none; color: var(--text-dim);
+    font-size: 1.2rem; cursor: pointer;
+  }
+  .modal-body { padding: 1.25rem; overflow-y: auto; }
+  .modal-body p { color: var(--text-dim); font-size: 0.82rem; line-height: 1.5; }
+  textarea#embed-output {
+    width: 100%;
+    height: 260px;
+    background: #0b0d11;
+    color: #c9f7d1;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.72rem;
+    padding: 0.75rem;
+    resize: vertical;
+  }
+  .copy-btn {
+    margin-top: 0.75rem;
+    background: var(--accent-2);
+    color: #062a1b;
+    border: none;
+    padding: 0.6rem 1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .copy-btn.copied { background: #a7f3d0; }
+
+  /* Live preview slider tweaks so it fits nicely regardless of user theme */
+  .slider-bit { background: #000; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Slider<span>Bit</span></h1>
+  </div>
+  <button class="primary" style="width:auto; margin:0; padding:0.6rem 1.1rem;" id="open-embed">Get Embed Code</button>
+</header>
+<p style="margin:0.35rem 1.5rem 0; color:var(--text-dim); font-size:0.82rem;">Upload images, configure your slider, copy the embed code into Webflow.</p>
+
+<div class="layout">
+
+  <!-- LEFT: Images -->
+  <div class="panel">
+    <h2>Images</h2>
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="file-input" accept="image/*" multiple>
+      Drop images here or click to upload
+    </label>
+    <div class="thumb-grid" id="thumb-grid"></div>
+    <div class="empty-hint" id="empty-hint">No images yet — add at least one to see the preview.</div>
+  </div>
+
+  <!-- CENTER: Live preview -->
+  <div class="preview-wrap">
+    <div class="preview-stage">
+      <div class="slider-bit" id="preview-slider">
+        <div class="slider-bit__track"></div>
+      </div>
+    </div>
+    <div class="preview-hint">Live preview — updates as you change settings.</div>
+  </div>
+
+  <!-- RIGHT: Config -->
+  <div class="panel">
+    <h2>Layout</h2>
+    <div class="field">
+      <label>Slides per view <span id="perPage-val">1</span></label>
+      <input type="range" id="perPage" min="1" max="6" step="1" value="1">
+    </div>
+    <div class="field">
+      <label>Gap (px) <span id="gap-val">16</span></label>
+      <input type="range" id="gap" min="0" max="64" step="2" value="16">
+    </div>
+    <div class="field">
+      <label>Aspect ratio</label>
+      <select id="aspectRatio">
+        <option value="16/9" selected>16:9 (widescreen)</option>
+        <option value="4/3">4:3</option>
+        <option value="1/1">1:1 (square)</option>
+        <option value="21/9">21:9 (ultra-wide)</option>
+        <option value="3/4">3:4 (portrait)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Direction</label>
+      <select id="direction">
+        <option value="ltr" selected>Horizontal</option>
+        <option value="vertical">Vertical</option>
+      </select>
+    </div>
+
+    <h2>Behavior</h2>
+    <div class="field">
+      <label>Transition</label>
+      <select id="type">
+        <option value="slide" selected>Slide</option>
+        <option value="fade">Fade</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Speed (ms) <span id="speed-val">500</span></label>
+      <input type="range" id="speed" min="150" max="1200" step="50" value="500">
+    </div>
+    <div class="row-check"><label for="loop">Loop</label><input type="checkbox" id="loop" checked></div>
+    <div class="row-check"><label for="autoplay">Autoplay</label><input type="checkbox" id="autoplay"></div>
+    <div class="field sub-field" id="interval-field" style="display:none;">
+      <label>Interval (ms) <span id="interval-val">4000</span></label>
+      <input type="range" id="interval" min="1500" max="10000" step="250" value="4000">
+    </div>
+    <div class="row-check"><label for="pauseOnHover">Pause on hover</label><input type="checkbox" id="pauseOnHover" checked></div>
+    <div class="row-check"><label for="drag">Drag / swipe</label><input type="checkbox" id="drag" checked></div>
+    <div class="row-check"><label for="keyboard">Keyboard nav</label><input type="checkbox" id="keyboard" checked></div>
+
+    <h2>Style</h2>
+    <div class="row-check"><label for="arrows">Arrows</label><input type="checkbox" id="arrows" checked></div>
+    <div class="row-check"><label for="pagination">Pagination dots</label><input type="checkbox" id="pagination" checked></div>
+    <div class="field">
+      <label>Arrow color</label>
+      <input type="color" id="arrowColor" value="#1a1a1a">
+    </div>
+    <div class="field">
+      <label>Dot color (active)</label>
+      <input type="color" id="dotColorActive" value="#ffffff">
+    </div>
+    <div class="field">
+      <label>Corner radius (px) <span id="radius-val">8</span></label>
+      <input type="range" id="radius" min="0" max="32" step="1" value="8">
+    </div>
+  </div>
+</div>
+
+<!-- Embed modal -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Embed code for Webflow</h3>
+      <button id="close-modal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p>In Webflow, drag an <strong>Embed</strong> element onto your page and paste this in. It's fully self-contained (Slider Bit engine + styles + images) — no external files to host. For production use with many/large images, see the note in <code>plan.md</code> about hosting the engine on a CDN and images separately.</p>
+      <textarea id="embed-output" readonly></textarea>
+      <button class="copy-btn" id="copy-btn">Copy to clipboard</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   Slider Bit engine (same as sliderbit.js) — inlined so this
+   file works standalone as both the dashboard AND the live preview.
+   ========================================================= */
+(function (global) {
+  'use strict';
+  var DEFAULTS = {
+    type: 'slide', direction: 'ltr', perPage: 1, perMove: null, gap: '1rem',
+    padding: '0', height: '', aspectRatio: '16/9', loop: true, autoplay: false,
+    interval: 4000, pauseOnHover: true, speed: 500,
+    easing: 'cubic-bezier(0.25, 1, 0.5, 1)', arrows: true, pagination: true,
+    drag: true, keyboard: true, lazyLoad: true, startIndex: 0, breakpoints: {}
+  };
+  var instanceId = 0;
+  function SliderBit(el, userOptions) {
+    if (!el) return;
+    if (el.__sliderBitInstance) return el.__sliderBitInstance;
+    this.el = el;
+    this.id = 'sb-' + (++instanceId);
+    var attrConfig = {};
+    try {
+      var raw = el.getAttribute('data-sliderbit-config');
+      if (raw) attrConfig = JSON.parse(raw);
+    } catch (e) { console.warn('SliderBit: bad data-sliderbit-config', e); }
+    this.baseOptions = Object.assign({}, DEFAULTS, attrConfig, userOptions || {});
+    this.options = Object.assign({}, this.baseOptions);
+    this.track = el.querySelector('.slider-bit__track');
+    this.slides = this.track ? Array.prototype.slice.call(this.track.children) : [];
+    this.index = this.options.startIndex || 0;
+    this.isFade = this.options.type === 'fade';
+    this.isVertical = this.options.direction === 'vertical';
+    this._autoplayTimer = null;
+    this._dragging = false;
+    if (!this.track || this.slides.length === 0) return;
+    el.__sliderBitInstance = this;
+    this._build();
+    this._applyResponsive();
+    this._bindEvents();
+    this._render(false);
+    if (this.options.autoplay) this.play();
+  }
+  SliderBit.prototype._build = function () {
+    var el = this.el;
+    el.classList.add('slider-bit');
+    if (this.isVertical) el.classList.add('slider-bit--vertical');
+    el.setAttribute('role', 'region');
+    el.setAttribute('aria-roledescription', 'carousel');
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+    this.track.classList.add('slider-bit__track');
+    if (this.isFade) this.track.classList.add('slider-bit__track--fade');
+    this.slides.forEach(function (slide, i) {
+      slide.classList.add('slider-bit__slide');
+      slide.setAttribute('role', 'group');
+      slide.setAttribute('aria-roledescription', 'slide');
+      slide.setAttribute('aria-label', (i + 1) + ' of ' + this.slides.length);
+      var img = slide.querySelector('img');
+      if (img && this.options.lazyLoad && !img.hasAttribute('loading')) img.setAttribute('loading', 'lazy');
+    }, this);
+    this.liveRegion = document.createElement('div');
+    this.liveRegion.className = 'slider-bit__live';
+    this.liveRegion.setAttribute('aria-live', 'polite');
+    this.liveRegion.setAttribute('aria-atomic', 'true');
+    el.appendChild(this.liveRegion);
+    if (this.options.arrows && this.slides.length > 1) {
+      this.prevBtn = this._createArrow('prev', '‹');
+      this.nextBtn = this._createArrow('next', '›');
+      el.appendChild(this.prevBtn);
+      el.appendChild(this.nextBtn);
+    }
+    if (this.options.pagination && this.slides.length > 1) {
+      this.pagination = document.createElement('div');
+      this.pagination.className = 'slider-bit__pagination';
+      this.pagination.setAttribute('role', 'tablist');
+      el.appendChild(this.pagination);
+      this._buildPagination();
+    }
+    if (this.options.height) el.style.setProperty('--sb-height', this.options.height);
+    else if (this.options.aspectRatio) el.style.setProperty('--sb-aspect-ratio', this.options.aspectRatio);
+    el.style.setProperty('--sb-speed', this.options.speed + 'ms');
+    el.style.setProperty('--sb-easing', this.options.easing);
+    el.style.setProperty('--sb-gap', this._toCss(this.options.gap));
+    el.style.setProperty('--sb-padding', this._toCss(this.options.padding));
+  };
+  SliderBit.prototype._perMove = function () {
+    return this.options.perMove != null ? this.options.perMove : (this.options.perPage || 1);
+  };
+  SliderBit.prototype._toCss = function (v) { return typeof v === 'number' ? v + 'px' : v; };
+  SliderBit.prototype._createArrow = function (dir, label) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'slider-bit__arrow slider-bit__arrow--' + dir;
+    btn.setAttribute('aria-label', dir === 'prev' ? 'Previous slide' : 'Next slide');
+    btn.innerHTML = '<span aria-hidden="true">' + label + '</span>';
+    var self = this;
+    btn.addEventListener('click', function () { dir === 'prev' ? self.prev() : self.next(); });
+    return btn;
+  };
+  SliderBit.prototype._buildPagination = function () {
+    if (!this.pagination) return;
+    this.pagination.innerHTML = '';
+    var pages = this._pageCount();
+    var self = this;
+    for (var i = 0; i < pages; i++) {
+      (function (i) {
+        var dot = document.createElement('button');
+        dot.type = 'button';
+        dot.className = 'slider-bit__dot';
+        dot.setAttribute('role', 'tab');
+        dot.setAttribute('aria-label', 'Go to slide ' + (i + 1));
+        dot.addEventListener('click', function () { self.goTo(i * self._perMove()); });
+        self.pagination.appendChild(dot);
+      })(i);
+    }
+  };
+  SliderBit.prototype._pageCount = function () {
+    var per = this._perMove();
+    return Math.max(1, Math.ceil(this.slides.length / per));
+  };
+  SliderBit.prototype._applyResponsive = function () {
+    var bp = this.options.breakpoints;
+    if (!bp || Object.keys(bp).length === 0) return;
+    var self = this;
+    var widths = Object.keys(bp).map(Number).sort(function (a, b) { return a - b; });
+    function apply() {
+      var w = global.innerWidth;
+      var merged = Object.assign({}, self.baseOptions);
+      widths.forEach(function (bw) { if (w <= bw) merged = Object.assign(merged, bp[bw]); });
+      var perPageChanged = merged.perPage !== self.options.perPage;
+      self.options = merged;
+      self.isFade = self.options.type === 'fade';
+      if (perPageChanged) self._buildPagination();
+      self._render(false);
+    }
+    apply();
+    global.addEventListener('resize', debounce(apply, 150));
+  };
+  function debounce(fn, wait) {
+    var t;
+    return function () {
+      clearTimeout(t);
+      var args = arguments;
+      t = setTimeout(function () { fn.apply(null, args); }, wait);
+    };
+  }
+  SliderBit.prototype._bindEvents = function () {
+    var self = this;
+    if (this.options.keyboard) {
+      this.el.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight') self.next();
+        if (e.key === 'ArrowLeft') self.prev();
+      });
+    }
+    if (this.options.pauseOnHover && this.options.autoplay) {
+      this.el.addEventListener('mouseenter', function () { self.pause(); });
+      this.el.addEventListener('mouseleave', function () { self.play(); });
+    }
+    if (this.options.drag) this._bindDrag();
+    global.addEventListener('resize', debounce(function () { self._render(false); }, 150));
+  };
+  SliderBit.prototype._bindDrag = function () {
+    var self = this;
+    var startX = 0, startY = 0, deltaX = 0, deltaY = 0, dragging = false;
+    var track = this.track;
+    function pointerDown(e) {
+      dragging = true; self._dragging = true;
+      var p = e.touches ? e.touches[0] : e;
+      startX = p.clientX; startY = p.clientY; deltaX = 0; deltaY = 0;
+      track.classList.add('slider-bit__track--dragging');
+    }
+    function pointerMove(e) {
+      if (!dragging) return;
+      var p = e.touches ? e.touches[0] : e;
+      deltaX = p.clientX - startX; deltaY = p.clientY - startY;
+      if (Math.abs(deltaX) > Math.abs(deltaY) && e.cancelable) e.preventDefault();
+    }
+    function pointerUp() {
+      if (!dragging) return;
+      dragging = false; self._dragging = false;
+      track.classList.remove('slider-bit__track--dragging');
+      var threshold = 40;
+      var delta = self.isVertical ? deltaY : deltaX;
+      if (delta > threshold) self.prev();
+      else if (delta < -threshold) self.next();
+      else self._render(false);
+    }
+    track.addEventListener('mousedown', pointerDown);
+    global.addEventListener('mousemove', pointerMove);
+    global.addEventListener('mouseup', pointerUp);
+    track.addEventListener('touchstart', pointerDown, { passive: true });
+    track.addEventListener('touchmove', pointerMove, { passive: false });
+    track.addEventListener('touchend', pointerUp);
+  };
+  SliderBit.prototype.next = function () { this.goTo(this.index + this._perMove()); };
+  SliderBit.prototype.prev = function () { this.goTo(this.index - this._perMove()); };
+  SliderBit.prototype.goTo = function (i) {
+    var len = this.slides.length;
+    if (this.options.loop) this.index = ((i % len) + len) % len;
+    else this.index = Math.max(0, Math.min(i, len - (this.options.perPage || 1)));
+    this._render(true);
+    this._announce();
+  };
+  SliderBit.prototype._announce = function () {
+    if (this.liveRegion) this.liveRegion.textContent = 'Slide ' + (this.index + 1) + ' of ' + this.slides.length;
+  };
+  SliderBit.prototype._render = function (animate) {
+    var per = this.options.perPage || 1;
+    var track = this.track;
+    if (this.isFade) {
+      this.slides.forEach(function (slide, i) {
+        slide.style.transition = animate ? 'opacity var(--sb-speed) var(--sb-easing)' : 'none';
+        slide.style.opacity = i === this.index ? '1' : '0';
+        slide.style.zIndex = i === this.index ? '1' : '0';
+      }, this);
+    } else {
+      var slideSize = 100 / per;
+      this.slides.forEach(function (slide) {
+        slide.style.flex = '0 0 calc(' + slideSize + '% - (var(--sb-gap) * ' + (per - 1) + ' / ' + per + '))';
+      });
+      var offset = this.index * (100 / per);
+      track.style.transition = animate ? 'transform var(--sb-speed) var(--sb-easing)' : 'none';
+      track.style.transform = this.isVertical ? 'translateY(-' + offset + '%)' : 'translateX(-' + offset + '%)';
+    }
+    if (this.pagination) {
+      var activePage = Math.floor(this.index / this._perMove());
+      Array.prototype.forEach.call(this.pagination.children, function (dot, i) {
+        dot.classList.toggle('is-active', i === activePage);
+        dot.setAttribute('aria-selected', i === activePage ? 'true' : 'false');
+      });
+    }
+    if (this.prevBtn) this.prevBtn.disabled = !this.options.loop && this.index <= 0;
+    if (this.nextBtn) this.nextBtn.disabled = !this.options.loop && this.index >= this.slides.length - per;
+  };
+  SliderBit.prototype.play = function () {
+    var self = this;
+    this.pause();
+    this._autoplayTimer = setInterval(function () { self.next(); }, this.options.interval || 4000);
+  };
+  SliderBit.prototype.pause = function () {
+    if (this._autoplayTimer) { clearInterval(this._autoplayTimer); this._autoplayTimer = null; }
+  };
+  SliderBit.prototype.destroy = function () { this.pause(); delete this.el.__sliderBitInstance; };
+  global.SliderBit = SliderBit;
+})(window);
+</script>
+
+<script>
+/* =========================================================
+   Slider Bit — dashboard app logic
+   ========================================================= */
+(function () {
+  'use strict';
+
+  var images = []; // { id, src (base64), alt }
+  var nextId = 1;
+
+  var els = {
+    dropzone: document.getElementById('dropzone'),
+    fileInput: document.getElementById('file-input'),
+    thumbGrid: document.getElementById('thumb-grid'),
+    emptyHint: document.getElementById('empty-hint'),
+    previewSlider: document.getElementById('preview-slider'),
+    openEmbed: document.getElementById('open-embed'),
+    modalBackdrop: document.getElementById('modal-backdrop'),
+    closeModal: document.getElementById('close-modal'),
+    embedOutput: document.getElementById('embed-output'),
+    copyBtn: document.getElementById('copy-btn')
+  };
+
+  var controlIds = ['perPage','gap','aspectRatio','direction','type','speed','loop','autoplay',
+    'interval','pauseOnHover','drag','keyboard','arrows','pagination','arrowColor','dotColorActive','radius'];
+  var controls = {};
+  controlIds.forEach(function (id) { controls[id] = document.getElementById(id); });
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /* ---------- Image upload ---------- */
+  els.dropzone.addEventListener('click', function (e) {
+    if (e.target !== els.fileInput) els.fileInput.click();
+  });
+  els.dropzone.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    els.dropzone.classList.add('drag-over');
+  });
+  els.dropzone.addEventListener('dragleave', function () {
+    els.dropzone.classList.remove('drag-over');
+  });
+  els.dropzone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    els.dropzone.classList.remove('drag-over');
+    handleFiles(e.dataTransfer.files);
+  });
+  els.fileInput.addEventListener('change', function (e) {
+    handleFiles(e.target.files);
+    els.fileInput.value = '';
+  });
+
+  function handleFiles(fileList) {
+    Array.prototype.forEach.call(fileList, function (file) {
+      if (!file.type.startsWith('image/')) return;
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        images.push({ id: nextId++, src: e.target.result, alt: file.name.replace(/\.[^.]+$/, '') });
+        renderThumbs();
+        renderPreview();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderThumbs() {
+    els.emptyHint.style.display = images.length ? 'none' : 'block';
+    els.thumbGrid.innerHTML = '';
+    images.forEach(function (img, index) {
+      var row = document.createElement('div');
+      row.className = 'thumb';
+      row.draggable = true;
+      row.dataset.id = img.id;
+
+      var thumbImg = document.createElement('img');
+      thumbImg.src = img.src;
+      row.appendChild(thumbImg);
+
+      var meta = document.createElement('div');
+      meta.className = 'meta';
+      var altInput = document.createElement('input');
+      altInput.type = 'text';
+      altInput.placeholder = 'Alt text';
+      altInput.value = img.alt;
+      altInput.addEventListener('input', function () {
+        img.alt = altInput.value;
+        renderPreview();
+      });
+      meta.appendChild(altInput);
+      row.appendChild(meta);
+
+      var removeBtn = document.createElement('button');
+      removeBtn.className = 'remove';
+      removeBtn.innerHTML = '&times;';
+      removeBtn.title = 'Remove';
+      removeBtn.addEventListener('click', function () {
+        images.splice(index, 1);
+        renderThumbs();
+        renderPreview();
+      });
+      row.appendChild(removeBtn);
+
+      row.addEventListener('dragstart', function () {
+        row.classList.add('dragging');
+        row.dataset.dragIndex = index;
+      });
+      row.addEventListener('dragend', function () {
+        row.classList.remove('dragging');
+      });
+      row.addEventListener('dragover', function (e) { e.preventDefault(); });
+      row.addEventListener('drop', function (e) {
+        e.preventDefault();
+        var fromIndex = Number(document.querySelector('.thumb.dragging') ? document.querySelector('.thumb.dragging').dataset.dragIndex : index);
+        var toIndex = index;
+        if (fromIndex === toIndex || isNaN(fromIndex)) return;
+        var moved = images.splice(fromIndex, 1)[0];
+        images.splice(toIndex, 0, moved);
+        renderThumbs();
+        renderPreview();
+      });
+
+      els.thumbGrid.appendChild(row);
+    });
+  }
+
+  /* ---------- Config ---------- */
+  function currentConfig() {
+    return {
+      type: controls.type.value,
+      direction: controls.direction.value,
+      perPage: Number(controls.perPage.value),
+      perMove: 1, // move one slide at a time even when showing multiple per view (smoother feel)
+      gap: Number(controls.gap.value) + 'px',
+      aspectRatio: controls.aspectRatio.value,
+      loop: controls.loop.checked,
+      autoplay: controls.autoplay.checked,
+      interval: Number(controls.interval.value),
+      pauseOnHover: controls.pauseOnHover.checked,
+      speed: Number(controls.speed.value),
+      arrows: controls.arrows.checked,
+      pagination: controls.pagination.checked,
+      drag: controls.drag.checked,
+      keyboard: controls.keyboard.checked,
+      lazyLoad: true
+    };
+  }
+
+  function currentTheme() {
+    return {
+      arrowColor: controls.arrowColor.value,
+      dotColorActive: controls.dotColorActive.value,
+      radius: Number(controls.radius.value)
+    };
+  }
+
+  ['perPage','gap','speed','interval','radius'].forEach(function (id) {
+    controls[id].addEventListener('input', function () {
+      document.getElementById(id + '-val').textContent = controls[id].value;
+      renderPreview();
+    });
+  });
+  controlIds.forEach(function (id) {
+    controls[id].addEventListener('change', renderPreview);
+    controls[id].addEventListener('input', renderPreview);
+  });
+  controls.autoplay.addEventListener('change', function () {
+    document.getElementById('interval-field').style.display = controls.autoplay.checked ? 'block' : 'none';
+  });
+
+  /* ---------- Live preview ---------- */
+  function buildSlidesHtml() {
+    return images.map(function (img) {
+      return '<div class="slider-bit__slide"><img src="' + img.src + '" alt="' + escapeHtml(img.alt) + '"></div>';
+    }).join('');
+  }
+
+  function applyTheme(el, theme) {
+    el.style.setProperty('--sb-arrow-color', theme.arrowColor);
+    el.style.setProperty('--sb-dot-color-active', theme.dotColorActive);
+    el.style.setProperty('--sb-radius', theme.radius + 'px');
+  }
+
+  function renderPreview() {
+    var el = els.previewSlider;
+    var config = currentConfig();
+    var theme = currentTheme();
+
+    el.className = 'slider-bit';
+    el.removeAttribute('style');
+    el.innerHTML = '<div class="slider-bit__track">' + buildSlidesHtml() + '</div>';
+    el.setAttribute('data-sliderbit-config', JSON.stringify(config));
+    delete el.__sliderBitInstance;
+
+    applyTheme(el, theme);
+
+    if (images.length > 0) {
+      new SliderBit(el);
+      // re-apply theme vars since _build() sets some inline vars too
+      applyTheme(el, theme);
+    }
+  }
+
+  /* ---------- Embed code generation ---------- */
+  var ENGINE_JS_SOURCE = document.querySelector('script:nth-of-type(1)').textContent;
+  var ENGINE_CSS_SOURCE =
+    '.slider-bit{--sb-gap:1rem;--sb-padding:0;--sb-speed:500ms;--sb-easing:cubic-bezier(0.25,1,0.5,1);' +
+    '--sb-height:auto;--sb-aspect-ratio:16/9;--sb-arrow-size:2.5rem;--sb-arrow-color:#1a1a1a;' +
+    '--sb-arrow-bg:rgba(255,255,255,0.85);--sb-arrow-bg-hover:#fff;--sb-dot-size:0.5rem;' +
+    '--sb-dot-color:rgba(255,255,255,0.5);--sb-dot-color-active:#fff;--sb-radius:8px;position:relative;' +
+    'width:100%;overflow:hidden;border-radius:var(--sb-radius);outline:none;box-sizing:border-box;padding:var(--sb-padding);}' +
+    '.slider-bit *{box-sizing:border-box;}' +
+    '.slider-bit__track{display:flex;will-change:transform;height:var(--sb-height);aspect-ratio:var(--sb-aspect-ratio);}' +
+    '.slider-bit__track--fade{position:relative;display:block;aspect-ratio:var(--sb-aspect-ratio);}' +
+    '.slider-bit__track--dragging{cursor:grabbing;}' +
+    '.slider-bit__slide{flex-shrink:0;position:relative;margin-right:var(--sb-gap);overflow:hidden;border-radius:var(--sb-radius);}' +
+    '.slider-bit__slide:last-child{margin-right:0;}' +
+    '.slider-bit__track--fade .slider-bit__slide{position:absolute;inset:0;margin:0;opacity:0;}' +
+    '.slider-bit__slide img,.slider-bit__slide video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;user-select:none;}' +
+    '.slider-bit__arrow{position:absolute;top:50%;transform:translateY(-50%);width:var(--sb-arrow-size);height:var(--sb-arrow-size);' +
+    'border:none;border-radius:50%;background:var(--sb-arrow-bg);color:var(--sb-arrow-color);font-size:calc(var(--sb-arrow-size) * 0.55);' +
+    'line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;transition:background 150ms ease,opacity 150ms ease;}' +
+    '.slider-bit__arrow:hover{background:var(--sb-arrow-bg-hover);}' +
+    '.slider-bit__arrow:disabled{opacity:0.3;cursor:not-allowed;}' +
+    '.slider-bit__arrow--prev{left:0.75rem;}' +
+    '.slider-bit__arrow--next{right:0.75rem;}' +
+    '.slider-bit--vertical .slider-bit__track{flex-direction:column;}' +
+    '.slider-bit--vertical .slider-bit__slide{margin-right:0;margin-bottom:var(--sb-gap);}' +
+    '.slider-bit--vertical .slider-bit__arrow--prev{top:0.75rem;left:50%;transform:translateX(-50%) rotate(90deg);}' +
+    '.slider-bit--vertical .slider-bit__arrow--next{bottom:0.75rem;top:auto;left:50%;transform:translateX(-50%) rotate(90deg);}' +
+    '.slider-bit__pagination{position:absolute;bottom:0.75rem;left:0;right:0;display:flex;justify-content:center;gap:0.5rem;z-index:2;}' +
+    '.slider-bit__dot{width:var(--sb-dot-size);height:var(--sb-dot-size);border-radius:50%;border:none;padding:0;' +
+    'background:var(--sb-dot-color);cursor:pointer;transition:background 150ms ease,transform 150ms ease;}' +
+    '.slider-bit__dot.is-active{background:var(--sb-dot-color-active);transform:scale(1.25);}' +
+    '.slider-bit__live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}' +
+    '@media (prefers-reduced-motion: reduce){.slider-bit__track,.slider-bit__slide{transition:none !important;}}';
+
+  function buildEmbedCode() {
+    var config = currentConfig();
+    var theme = currentTheme();
+    var uid = 'sliderbit-embed-' + Math.random().toString(36).slice(2, 8);
+
+    var slidesHtml = images.map(function (img) {
+      return '    <div class="slider-bit__slide"><img src="' + img.src + '" alt="' + escapeHtml(img.alt) + '"></div>';
+    }).join('\n');
+
+    var themeCss =
+      '#' + uid + '{' +
+      '--sb-arrow-color:' + theme.arrowColor + ';' +
+      '--sb-dot-color-active:' + theme.dotColorActive + ';' +
+      '--sb-radius:' + theme.radius + 'px;' +
+      '}';
+
+    return [
+      '<!-- Slider Bit embed — paste this whole block into a Webflow Embed element -->',
+      '<style>',
+      ENGINE_CSS_SOURCE,
+      themeCss,
+      '</style>',
+      '',
+      '<div class="slider-bit" id="' + uid + '" data-sliderbit-config=\'' + JSON.stringify(config) + '\'>',
+      '  <div class="slider-bit__track">',
+      slidesHtml,
+      '  </div>',
+      '</div>',
+      '',
+      '<script>',
+      ENGINE_JS_SOURCE,
+      '<' + '/script>'
+    ].join('\n');
+  }
+
+  /* ---------- Modal ---------- */
+  els.openEmbed.addEventListener('click', function () {
+    els.embedOutput.value = buildEmbedCode();
+    els.modalBackdrop.classList.add('open');
+  });
+  els.closeModal.addEventListener('click', function () {
+    els.modalBackdrop.classList.remove('open');
+  });
+  els.modalBackdrop.addEventListener('click', function (e) {
+    if (e.target === els.modalBackdrop) els.modalBackdrop.classList.remove('open');
+  });
+  els.copyBtn.addEventListener('click', function () {
+    els.embedOutput.select();
+    var done = function () {
+      els.copyBtn.textContent = 'Copied!';
+      els.copyBtn.classList.add('copied');
+      setTimeout(function () {
+        els.copyBtn.textContent = 'Copy to clipboard';
+        els.copyBtn.classList.remove('copied');
+      }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(els.embedOutput.value).then(done).catch(function () {
+        document.execCommand('copy'); done();
+      });
+    } else {
+      document.execCommand('copy');
+      done();
+    }
+  });
+
+  /* ---------- Init ---------- */
+  renderThumbs();
+  renderPreview();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,16 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# Friendly API paths -> the actual functions.
+[[redirects]]
+  from = "/api/sliders"
+  to = "/.netlify/functions/slider-save"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/sliders/*"
+  to = "/.netlify/functions/slider-get?id=:splat"
+  status = 200
+  force = true

@@ -358,10 +358,72 @@
     delete this.el.__sliderBitInstance;
   };
 
+  // ---------------------------------------------------------------------
+  // Remote hydration: a container can skip inline markup entirely and just
+  // carry a data-sliderbit-id. In that case we fetch its config + images
+  // from the Slider Bit API (hosted alongside this script, or wherever
+  // data-sliderbit-api points) and build the track/slide markup before
+  // handing off to the normal constructor. This is what keeps embed code
+  // to a couple of lines regardless of how many images a slider has:
+  //
+  //   <div class="slider-bit" data-sliderbit-id="abc123"></div>
+  //   <link rel="stylesheet" href="https://your-site.netlify.app/sliderbit.css">
+  //   <script src="https://your-site.netlify.app/sliderbit.js" defer></script>
+  // ---------------------------------------------------------------------
+
+  var __scriptEl = (typeof document !== 'undefined') ? document.currentScript : null;
+  var API_BASE = '';
+  if (__scriptEl && __scriptEl.src) {
+    try { API_BASE = new URL(__scriptEl.src).origin; } catch (e) { API_BASE = ''; }
+  }
+
+  function escapeAttr(str) {
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function hydrateRemote(el, id) {
+    var apiBase = el.getAttribute('data-sliderbit-api') || API_BASE;
+    if (!apiBase) {
+      console.warn('SliderBit: no API base available (script must be loaded via <script src="..."> from your hosted domain, or set data-sliderbit-api on the container) — cannot load remote slider', id);
+      return;
+    }
+    fetch(apiBase + '/api/sliders/' + encodeURIComponent(id))
+      .then(function (res) {
+        if (!res.ok) throw new Error('failed to load slider "' + id + '" (HTTP ' + res.status + ')');
+        return res.json();
+      })
+      .then(function (data) {
+        var images = data.images || [];
+        var html = images.map(function (img) {
+          return '<div class="slider-bit__slide"><img src="' + img.src + '" alt="' + escapeAttr(img.alt || '') + '"></div>';
+        }).join('');
+        el.innerHTML = '<div class="slider-bit__track">' + html + '</div>';
+        el.setAttribute('data-sliderbit-config', JSON.stringify(data.config || {}));
+        if (data.theme) {
+          if (data.theme.arrowColor) el.style.setProperty('--sb-arrow-color', data.theme.arrowColor);
+          if (data.theme.dotColorActive) el.style.setProperty('--sb-dot-color-active', data.theme.dotColorActive);
+          if (data.theme.radius != null) el.style.setProperty('--sb-radius', data.theme.radius + 'px');
+        }
+        new SliderBit(el);
+      })
+      .catch(function (err) {
+        console.warn('SliderBit:', err.message || err);
+      });
+  }
+
   function initAll(root) {
     var scope = root || document;
     var nodes = scope.querySelectorAll('.slider-bit');
-    Array.prototype.forEach.call(nodes, function (el) { new SliderBit(el); });
+    Array.prototype.forEach.call(nodes, function (el) {
+      var remoteId = el.getAttribute('data-sliderbit-id');
+      if (remoteId && !el.querySelector('.slider-bit__track')) {
+        hydrateRemote(el, remoteId);
+      } else {
+        new SliderBit(el);
+      }
+    });
   }
 
   if (document.readyState === 'loading') {

@@ -279,6 +279,13 @@
   <!-- LEFT: Images -->
   <div class="panel">
     <h2>Images</h2>
+    <div class="field" style="margin-bottom:1rem;">
+      <label>Editing an existing slider?</label>
+      <div style="display:flex; gap:0.4rem;">
+        <input type="text" id="load-id-input" placeholder="Paste slider ID">
+        <button type="button" id="load-id-btn" style="flex-shrink:0; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:0.4rem 0.7rem; cursor:pointer; font-size:0.8rem;">Load</button>
+      </div>
+    </div>
     <label class="dropzone" id="dropzone">
       <input type="file" id="file-input" accept="image/*" multiple>
       Drop images here or click to upload
@@ -374,9 +381,13 @@
       <button id="close-modal">&times;</button>
     </div>
     <div class="modal-body">
-      <p>In Webflow, drag an <strong>Embed</strong> element onto your page and paste this in. It's fully self-contained (Slider Bit engine + styles + images) — no external files to host. For production use with many/large images, see the note in <code>plan.md</code> about hosting the engine on a CDN and images separately.</p>
+      <p id="embed-status">Publishing your slider…</p>
       <textarea id="embed-output" readonly></textarea>
-      <button class="copy-btn" id="copy-btn">Copy to clipboard</button>
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin-top:0.75rem;">
+        <button class="copy-btn" id="copy-btn" style="margin-top:0;">Copy to clipboard</button>
+        <button type="button" id="toggle-embed-mode" style="background:none; border:none; color:var(--text-dim); font-size:0.78rem; cursor:pointer; text-decoration:underline; padding:0;">Use self-contained code instead</button>
+      </div>
+      <p id="slider-id-note" style="display:none; margin-top:0.75rem;">Slider ID: <code id="slider-id-value"></code> — paste this into "Editing an existing slider?" later to load it back up for edits.</p>
     </div>
   </div>
 </div>
@@ -636,6 +647,12 @@
 
   var images = []; // { id, src (base64), alt }
   var nextId = 1;
+  var currentSliderId = null;
+  var API_BASE = window.location.origin;
+  var IS_FILE_PROTOCOL = window.location.protocol === 'file:';
+  var lastHostedCode = null;
+  var lastSelfContainedCode = null;
+  var showingSelfContained = false;
 
   var els = {
     dropzone: document.getElementById('dropzone'),
@@ -647,7 +664,13 @@
     modalBackdrop: document.getElementById('modal-backdrop'),
     closeModal: document.getElementById('close-modal'),
     embedOutput: document.getElementById('embed-output'),
-    copyBtn: document.getElementById('copy-btn')
+    copyBtn: document.getElementById('copy-btn'),
+    embedStatus: document.getElementById('embed-status'),
+    toggleEmbedMode: document.getElementById('toggle-embed-mode'),
+    sliderIdNote: document.getElementById('slider-id-note'),
+    sliderIdValue: document.getElementById('slider-id-value'),
+    loadIdInput: document.getElementById('load-id-input'),
+    loadIdBtn: document.getElementById('load-id-btn')
   };
 
   var controlIds = ['perPage','gap','aspectRatio','direction','type','speed','loop','autoplay',
@@ -785,6 +808,49 @@
     };
   }
 
+  function applyConfigToControls(config, theme) {
+    config = config || {};
+    theme = theme || {};
+    if (config.type) controls.type.value = config.type;
+    if (config.direction) controls.direction.value = config.direction;
+    if (config.perPage != null) {
+      controls.perPage.value = config.perPage;
+      document.getElementById('perPage-val').textContent = config.perPage;
+    }
+    if (config.gap != null) {
+      var g = parseInt(config.gap, 10);
+      if (!isNaN(g)) {
+        controls.gap.value = g;
+        document.getElementById('gap-val').textContent = g;
+      }
+    }
+    if (config.aspectRatio) controls.aspectRatio.value = config.aspectRatio;
+    if (typeof config.loop === 'boolean') controls.loop.checked = config.loop;
+    if (typeof config.autoplay === 'boolean') {
+      controls.autoplay.checked = config.autoplay;
+      document.getElementById('interval-field').style.display = config.autoplay ? 'block' : 'none';
+    }
+    if (config.interval != null) {
+      controls.interval.value = config.interval;
+      document.getElementById('interval-val').textContent = config.interval;
+    }
+    if (typeof config.pauseOnHover === 'boolean') controls.pauseOnHover.checked = config.pauseOnHover;
+    if (config.speed != null) {
+      controls.speed.value = config.speed;
+      document.getElementById('speed-val').textContent = config.speed;
+    }
+    if (typeof config.arrows === 'boolean') controls.arrows.checked = config.arrows;
+    if (typeof config.pagination === 'boolean') controls.pagination.checked = config.pagination;
+    if (typeof config.drag === 'boolean') controls.drag.checked = config.drag;
+    if (typeof config.keyboard === 'boolean') controls.keyboard.checked = config.keyboard;
+    if (theme.arrowColor) controls.arrowColor.value = theme.arrowColor;
+    if (theme.dotColorActive) controls.dotColorActive.value = theme.dotColorActive;
+    if (theme.radius != null) {
+      controls.radius.value = theme.radius;
+      document.getElementById('radius-val').textContent = theme.radius;
+    }
+  }
+
   ['perPage','gap','speed','interval','radius'].forEach(function (id) {
     controls[id].addEventListener('input', function () {
       document.getElementById(id + '-val').textContent = controls[id].value;
@@ -866,7 +932,7 @@
     '.slider-bit__live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}' +
     '@media (prefers-reduced-motion: reduce){.slider-bit__track,.slider-bit__slide{transition:none !important;}}';
 
-  function buildEmbedCode() {
+  function buildSelfContainedEmbedCode() {
     var config = currentConfig();
     var theme = currentTheme();
     var uid = 'sliderbit-embed-' + Math.random().toString(36).slice(2, 8);
@@ -883,7 +949,7 @@
       '}';
 
     return [
-      '<!-- Slider Bit embed — paste this whole block into a Webflow Embed element -->',
+      '<!-- Slider Bit embed (self-contained) — paste this whole block into a Webflow Embed element -->',
       '<style>',
       ENGINE_CSS_SOURCE,
       themeCss,
@@ -901,11 +967,94 @@
     ].join('\n');
   }
 
+  function buildHostedEmbedCode(id) {
+    return [
+      '<!-- Slider Bit embed (hosted) — paste this into a Webflow Embed element -->',
+      '<div class="slider-bit" data-sliderbit-id="' + id + '"></div>',
+      '<link rel="stylesheet" href="' + API_BASE + '/sliderbit.css">',
+      '<script src="' + API_BASE + '/sliderbit.js" defer><' + '/script>'
+    ].join('\n');
+  }
+
+  function publishSlider() {
+    var payload = {
+      config: currentConfig(),
+      theme: currentTheme(),
+      images: images.map(function (img) { return { src: img.src, alt: img.alt }; })
+    };
+    if (currentSliderId) payload.id = currentSliderId;
+
+    return fetch(API_BASE + '/api/sliders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (res) {
+      if (!res.ok) {
+        return res.json().catch(function () { return {}; }).then(function (err) {
+          throw new Error(err.error || ('Publish failed (HTTP ' + res.status + ')'));
+        });
+      }
+      return res.json();
+    }).then(function (data) {
+      currentSliderId = data.id;
+      return data.id;
+    });
+  }
+
   /* ---------- Modal ---------- */
   els.openEmbed.addEventListener('click', function () {
-    els.embedOutput.value = buildEmbedCode();
     els.modalBackdrop.classList.add('open');
+    showingSelfContained = false;
+    els.toggleEmbedMode.style.display = 'inline';
+    els.toggleEmbedMode.textContent = 'Use self-contained code instead';
+    els.sliderIdNote.style.display = 'none';
+    els.copyBtn.disabled = true;
+    els.embedOutput.value = '';
+
+    if (IS_FILE_PROTOCOL) {
+      els.embedStatus.textContent = 'This page is open as a local file, so it can’t reach the publish API. Showing the self-contained embed instead (bigger, but works anywhere) — open this dashboard from your deployed Netlify URL to get the tiny hosted embed.';
+      lastSelfContainedCode = buildSelfContainedEmbedCode();
+      els.embedOutput.value = lastSelfContainedCode;
+      showingSelfContained = true;
+      els.toggleEmbedMode.style.display = 'none';
+      els.copyBtn.disabled = false;
+      return;
+    }
+
+    els.embedStatus.textContent = 'Publishing your slider…';
+
+    publishSlider().then(function (id) {
+      lastHostedCode = buildHostedEmbedCode(id);
+      lastSelfContainedCode = buildSelfContainedEmbedCode();
+      els.embedOutput.value = lastHostedCode;
+      els.embedStatus.textContent = 'Published — paste this into a Webflow Embed element:';
+      els.sliderIdValue.textContent = id;
+      els.sliderIdNote.style.display = 'block';
+      els.copyBtn.disabled = false;
+    }).catch(function (err) {
+      console.warn('Publish failed:', err);
+      lastSelfContainedCode = buildSelfContainedEmbedCode();
+      els.embedOutput.value = lastSelfContainedCode;
+      showingSelfContained = true;
+      els.embedStatus.textContent = 'Could not publish (' + (err.message || 'network error') + '). Showing the self-contained embed instead.';
+      els.toggleEmbedMode.style.display = 'none';
+      els.copyBtn.disabled = false;
+    });
   });
+
+  els.toggleEmbedMode.addEventListener('click', function () {
+    showingSelfContained = !showingSelfContained;
+    if (showingSelfContained) {
+      els.embedOutput.value = lastSelfContainedCode || buildSelfContainedEmbedCode();
+      els.embedStatus.textContent = 'Self-contained embed (works anywhere, no hosting needed, but bigger):';
+      els.toggleEmbedMode.textContent = 'Use hosted embed instead';
+    } else if (lastHostedCode) {
+      els.embedOutput.value = lastHostedCode;
+      els.embedStatus.textContent = 'Published — paste this into a Webflow Embed element:';
+      els.toggleEmbedMode.textContent = 'Use self-contained code instead';
+    }
+  });
+
   els.closeModal.addEventListener('click', function () {
     els.modalBackdrop.classList.remove('open');
   });
@@ -930,6 +1079,39 @@
       document.execCommand('copy');
       done();
     }
+  });
+
+  /* ---------- Load existing slider ---------- */
+  els.loadIdBtn.addEventListener('click', function () {
+    var id = els.loadIdInput.value.trim();
+    if (!id) return;
+    els.loadIdBtn.textContent = 'Loading…';
+    els.loadIdBtn.disabled = true;
+
+    fetch(API_BASE + '/api/sliders/' + encodeURIComponent(id))
+      .then(function (res) {
+        if (!res.ok) throw new Error('not found (HTTP ' + res.status + ')');
+        return res.json();
+      })
+      .then(function (data) {
+        currentSliderId = id;
+        images = (data.images || []).map(function (img) {
+          return { id: nextId++, src: img.src, alt: img.alt || '' };
+        });
+        applyConfigToControls(data.config, data.theme);
+        renderThumbs();
+        renderPreview();
+        els.loadIdBtn.textContent = 'Loaded!';
+        setTimeout(function () {
+          els.loadIdBtn.textContent = 'Load';
+          els.loadIdBtn.disabled = false;
+        }, 1200);
+      })
+      .catch(function (err) {
+        alert('Could not load slider "' + id + '": ' + err.message);
+        els.loadIdBtn.textContent = 'Load';
+        els.loadIdBtn.disabled = false;
+      });
   });
 
   /* ---------- Init ---------- */

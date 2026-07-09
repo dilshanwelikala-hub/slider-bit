@@ -6,7 +6,7 @@ A hosted dashboard where a user uploads images, configures a slider (à la Splid
 ## What's built
 
 ### Frontend
-- `sliderbit.js` — dependency-free carousel engine. Supports arrows, dots, autoplay, loop, perPage, gap, slide/fade transitions, drag & swipe, keyboard nav, responsive breakpoints, lazy-loaded images, pause-on-hover, ARIA live region. Reads config from a `data-sliderbit-config` JSON attribute, **or** (new) hydrates itself remotely from a `data-sliderbit-id`.
+- `sliderbit.js` — dependency-free carousel engine. Supports arrows, dots, autoplay, seamless clone-based infinite loop, perPage, gap/peek/padding, slide/fade transitions, momentum flick-drag (with optional free-scroll) & swipe, mouse-wheel nav, keyboard nav (with tab-scoped a11y so only visible slides are reachable), RTL + vertical direction, center-focus layout, responsive breakpoints, lazy-loaded images, pause-on-hover, ARIA live region, and a `sync()` method for linking a slider to a thumbnail/nav strip. Reads config from a `data-sliderbit-config` JSON attribute, **or** hydrates itself remotely from a `data-sliderbit-id`; nav/thumbnail pairs can also be wired declaratively via `data-sliderbit-sync` + `data-sliderbit-nav`. Feature set brought to rough parity with Splide.js v4 (loop/drag/wheel, sync, RTL/center-focus/a11y).
 - `sliderbit.css` — matching styles, themed via `--sb-*` CSS variables (arrow color/size, dot color/size, radius, transition speed).
 - `index.html` — the Slider Bit builder UI. Upload images, reorder them, tweak every option with live preview, then publish and copy a ready-to-paste embed block. Includes a "load an existing slider by ID" flow for coming back to edit something already published.
 
@@ -57,9 +57,11 @@ Netlify will pick up the push, install `@netlify/blobs` (because of `package.jso
 - Global JS object: `window.SliderBit`
 - Required container class: `slider-bit`
 - BEM elements: `slider-bit__track`, `slider-bit__slide`, `slider-bit__arrow`, `slider-bit__pagination`, `slider-bit__dot`, `slider-bit__live`
-- Modifiers: `slider-bit--vertical`, `slider-bit__track--fade`, `slider-bit__track--dragging`
+- Modifiers: `slider-bit--vertical`, `slider-bit--rtl`, `slider-bit--nav`, `slider-bit__track--fade`, `slider-bit__track--draggable`, `slider-bit__track--dragging`, `slider-bit__slide--clone`, `.is-active` (dots and nav thumbnails)
 - Config attribute (self-contained embed): `data-sliderbit-config`
 - Remote ID attribute (hosted embed): `data-sliderbit-id`
 - Optional API override: `data-sliderbit-api` (defaults to the origin the script itself was loaded from)
-- CSS custom properties: `--sb-*` (e.g. `--sb-gap`, `--sb-arrow-color`, `--sb-radius`)
+- Nav/thumbnail sync attributes (declarative, non-remote sliders): `data-sliderbit-sync="#otherSliderSelector"` + `data-sliderbit-nav` on the thumbnail slider
+- New engine options beyond the original set: `dragFree`, `flickPower`, `flickMaxPages`, `wheel`/`wheelMinThreshold`/`wheelSleep`, `peek` (number or `{start,end}`), `focus` (`'center'`), `direction: 'rtl'`
+- CSS custom properties: `--sb-*` (e.g. `--sb-gap`, `--sb-peek-start`/`--sb-peek-end`, `--sb-arrow-color`, `--sb-radius`)
 - API: `POST /api/sliders` (save/update), `GET /api/sliders/:id` (fetch)

@@ -334,9 +334,11 @@
       <label>Direction</label>
       <select id="direction">
         <option value="ltr" selected>Horizontal</option>
+        <option value="rtl">Horizontal (right to left)</option>
         <option value="vertical">Vertical</option>
       </select>
     </div>
+    <div class="row-check"><label for="focusCenter">Center focus</label><input type="checkbox" id="focusCenter"></div>
 
     <h2>Behavior</h2>
     <div class="field">
@@ -358,6 +360,7 @@
     </div>
     <div class="row-check"><label for="pauseOnHover">Pause on hover</label><input type="checkbox" id="pauseOnHover" checked></div>
     <div class="row-check"><label for="drag">Drag / swipe</label><input type="checkbox" id="drag" checked></div>
+    <div class="row-check"><label for="wheel">Mouse wheel nav</label><input type="checkbox" id="wheel"></div>
     <div class="row-check"><label for="keyboard">Keyboard nav</label><input type="checkbox" id="keyboard" checked></div>
 
     <h2>Style</h2>
@@ -401,17 +404,24 @@
 /* =========================================================
    Slider Bit engine (same as sliderbit.js) — inlined so this
    file works standalone as both the dashboard AND the live preview.
+   Kept in sync with sliderbit.js (minus the auto-init/remote-hydration
+   parts, which the dashboard doesn't need for its own preview).
    ========================================================= */
 (function (global) {
   'use strict';
+
   var DEFAULTS = {
     type: 'slide', direction: 'ltr', perPage: 1, perMove: null, gap: '1rem',
-    padding: '0', height: '', aspectRatio: '16/9', loop: true, autoplay: false,
-    interval: 4000, pauseOnHover: true, speed: 500,
+    padding: '0', peek: 0, focus: false, height: '', aspectRatio: '16/9',
+    loop: true, autoplay: false, interval: 4000, pauseOnHover: true, speed: 500,
     easing: 'cubic-bezier(0.25, 1, 0.5, 1)', arrows: true, pagination: true,
-    drag: true, keyboard: true, lazyLoad: true, startIndex: 0, breakpoints: {}
+    drag: true, dragFree: false, flickPower: 600, flickMaxPages: 1,
+    wheel: false, wheelMinThreshold: 40, wheelSleep: 700,
+    keyboard: true, lazyLoad: true, startIndex: 0, breakpoints: {}
   };
   var instanceId = 0;
+  var FOCUSABLE_SELECTOR = 'a[href], button, input, select, textarea, [tabindex]';
+
   function SliderBit(el, userOptions) {
     if (!el) return;
     if (el.__sliderBitInstance) return el.__sliderBitInstance;
@@ -426,11 +436,14 @@
     this.options = Object.assign({}, this.baseOptions);
     this.track = el.querySelector('.slider-bit__track');
     this.slides = this.track ? Array.prototype.slice.call(this.track.children) : [];
-    this.index = this.options.startIndex || 0;
     this.isFade = this.options.type === 'fade';
     this.isVertical = this.options.direction === 'vertical';
+    this.isRTL = this.options.direction === 'rtl';
     this._autoplayTimer = null;
     this._dragging = false;
+    this.cloneCount = 0;
+    this.realCount = this.slides.length;
+    this._changeCallbacks = [];
     if (!this.track || this.slides.length === 0) return;
     el.__sliderBitInstance = this;
     this._build();
@@ -439,20 +452,26 @@
     this._render(false);
     if (this.options.autoplay) this.play();
   }
+
   SliderBit.prototype._build = function () {
     var el = this.el;
     el.classList.add('slider-bit');
     if (this.isVertical) el.classList.add('slider-bit--vertical');
+    if (this.isRTL) el.classList.add('slider-bit--rtl');
     el.setAttribute('role', 'region');
     el.setAttribute('aria-roledescription', 'carousel');
     if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
     this.track.classList.add('slider-bit__track');
     if (this.isFade) this.track.classList.add('slider-bit__track--fade');
+    if (this.options.drag) this.track.classList.add('slider-bit__track--draggable');
+    this._buildClones();
     this.slides.forEach(function (slide, i) {
       slide.classList.add('slider-bit__slide');
       slide.setAttribute('role', 'group');
       slide.setAttribute('aria-roledescription', 'slide');
-      slide.setAttribute('aria-label', (i + 1) + ' of ' + this.slides.length);
+      var realI = typeof slide.__sbRealIndex === 'number' ? slide.__sbRealIndex : i;
+      var total = this.cloneCount ? this.realCount : this.slides.length;
+      slide.setAttribute('aria-label', (realI + 1) + ' of ' + total);
       var img = slide.querySelector('img');
       if (img && this.options.lazyLoad && !img.hasAttribute('loading')) img.setAttribute('loading', 'lazy');
     }, this);
@@ -480,6 +499,49 @@
     el.style.setProperty('--sb-easing', this.options.easing);
     el.style.setProperty('--sb-gap', this._toCss(this.options.gap));
     el.style.setProperty('--sb-padding', this._toCss(this.options.padding));
+    var peek = this._resolvePeek();
+    el.style.setProperty('--sb-peek-start', this._toCss(peek.start));
+    el.style.setProperty('--sb-peek-end', this._toCss(peek.end));
+  };
+  SliderBit.prototype._resolvePeek = function () {
+    var peek = this.options.peek;
+    if (peek && typeof peek === 'object') return { start: peek.start || 0, end: peek.end || 0 };
+    return { start: peek || 0, end: peek || 0 };
+  };
+  SliderBit.prototype._buildClones = function () {
+    var opts = this.options;
+    var eligible = opts.loop && opts.type !== 'fade' && this.slides.length > 1;
+    if (!eligible) {
+      this.cloneCount = 0;
+      this.slides.forEach(function (s, i) { s.__sbRealIndex = i; });
+      this.index = opts.startIndex || 0;
+      return;
+    }
+    var per = opts.perPage || 1;
+    var count = Math.min(this.slides.length, Math.max(per * 2, 2));
+    var real = this.slides.slice();
+    real.forEach(function (node, i) { node.__sbRealIndex = i; });
+    var headSrc = real.slice(real.length - count);
+    var headStartIndex = real.length - count;
+    var tailSrc = real.slice(0, count);
+    var head = headSrc.map(function (node, i) { return cloneNode(node, headStartIndex + i); });
+    var tail = tailSrc.map(function (node, i) { return cloneNode(node, i); });
+    var track = this.track;
+    var firstReal = real[0];
+    head.forEach(function (c) { track.insertBefore(c, firstReal); });
+    tail.forEach(function (c) { track.appendChild(c); });
+    this.cloneCount = count;
+    this.realCount = real.length;
+    this.slides = head.concat(real, tail);
+    this.index = count + (opts.startIndex || 0);
+    function cloneNode(node, realIdx) {
+      var clone = node.cloneNode(true);
+      clone.classList.add('slider-bit__slide--clone');
+      clone.setAttribute('aria-hidden', 'true');
+      clone.removeAttribute('id');
+      clone.__sbRealIndex = realIdx;
+      return clone;
+    }
   };
   SliderBit.prototype._perMove = function () {
     return this.options.perMove != null ? this.options.perMove : (this.options.perPage || 1);
@@ -514,7 +576,8 @@
   };
   SliderBit.prototype._pageCount = function () {
     var per = this._perMove();
-    return Math.max(1, Math.ceil(this.slides.length / per));
+    var count = this.cloneCount ? this.realCount : this.slides.length;
+    return Math.max(1, Math.ceil(count / per));
   };
   SliderBit.prototype._applyResponsive = function () {
     var bp = this.options.breakpoints;
@@ -546,8 +609,10 @@
     var self = this;
     if (this.options.keyboard) {
       this.el.addEventListener('keydown', function (e) {
-        if (e.key === 'ArrowRight') self.next();
-        if (e.key === 'ArrowLeft') self.prev();
+        var forwardKey = self.isVertical ? 'ArrowDown' : (self.isRTL ? 'ArrowLeft' : 'ArrowRight');
+        var backwardKey = self.isVertical ? 'ArrowUp' : (self.isRTL ? 'ArrowRight' : 'ArrowLeft');
+        if (e.key === forwardKey) self.next();
+        if (e.key === backwardKey) self.prev();
       });
     }
     if (this.options.pauseOnHover && this.options.autoplay) {
@@ -555,33 +620,89 @@
       this.el.addEventListener('mouseleave', function () { self.play(); });
     }
     if (this.options.drag) this._bindDrag();
+    if (this.options.wheel) this._bindWheel();
     global.addEventListener('resize', debounce(function () { self._render(false); }, 150));
+  };
+  SliderBit.prototype._bindWheel = function () {
+    var self = this;
+    var locked = false;
+    this.el.addEventListener('wheel', function (e) {
+      var delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (Math.abs(delta) < (self.options.wheelMinThreshold || 40)) return;
+      e.preventDefault();
+      if (locked) return;
+      if (delta > 0) self.next(); else self.prev();
+      locked = true;
+      setTimeout(function () { locked = false; }, self.options.wheelSleep || 700);
+    }, { passive: false });
   };
   SliderBit.prototype._bindDrag = function () {
     var self = this;
-    var startX = 0, startY = 0, deltaX = 0, deltaY = 0, dragging = false;
+    var startX = 0, startY = 0, lastAxis = 0, lastTime = 0, velocity = 0;
+    var dragging = false, committed = false;
+    var trackSizePx = 0;
+    var startIndex = 0;
     var track = this.track;
+    function axisOf(e) { var p = e.touches ? e.touches[0] : e; return self.isVertical ? p.clientY : p.clientX; }
+    function crossAxisOf(e) { var p = e.touches ? e.touches[0] : e; return self.isVertical ? p.clientX : p.clientY; }
+    function trackRectSize() {
+      var r = track.getBoundingClientRect();
+      return (self.isVertical ? r.height : r.width) || 1;
+    }
     function pointerDown(e) {
-      dragging = true; self._dragging = true;
+      if (dragging) return;
       var p = e.touches ? e.touches[0] : e;
-      startX = p.clientX; startY = p.clientY; deltaX = 0; deltaY = 0;
-      track.classList.add('slider-bit__track--dragging');
+      startX = p.clientX; startY = p.clientY;
+      lastAxis = axisOf(e); lastTime = Date.now(); velocity = 0;
+      dragging = true; committed = false;
+      startIndex = self.index;
+      trackSizePx = trackRectSize();
     }
     function pointerMove(e) {
       if (!dragging) return;
-      var p = e.touches ? e.touches[0] : e;
-      deltaX = p.clientX - startX; deltaY = p.clientY - startY;
-      if (Math.abs(deltaX) > Math.abs(deltaY) && e.cancelable) e.preventDefault();
+      var axis = axisOf(e);
+      var cross = crossAxisOf(e);
+      var mainDelta = axis - (self.isVertical ? startY : startX);
+      var crossDelta = cross - (self.isVertical ? startX : startY);
+      if (!committed) {
+        if (Math.abs(mainDelta) < 5 && Math.abs(crossDelta) < 5) return;
+        if (Math.abs(mainDelta) <= Math.abs(crossDelta)) { dragging = false; return; }
+        committed = true;
+        self._dragging = true;
+        track.classList.add('slider-bit__track--dragging');
+      }
+      if (e.cancelable) e.preventDefault();
+      var now = Date.now();
+      var dt = now - lastTime;
+      if (dt > 0) velocity = (axis - lastAxis) / dt;
+      lastAxis = axis; lastTime = now;
+      var per = self.options.perPage || 1;
+      var deltaIdx = (mainDelta / trackSizePx) * per;
+      var rawIndex = self.isRTL ? startIndex + deltaIdx : startIndex - deltaIdx;
+      self._applyTransform(rawIndex, false);
     }
     function pointerUp() {
       if (!dragging) return;
-      dragging = false; self._dragging = false;
+      dragging = false;
+      if (!committed) return;
+      committed = false;
+      self._dragging = false;
       track.classList.remove('slider-bit__track--dragging');
-      var threshold = 40;
-      var delta = self.isVertical ? deltaY : deltaX;
-      if (delta > threshold) self.prev();
-      else if (delta < -threshold) self.next();
-      else self._render(false);
+      var per = self.options.perPage || 1;
+      var perMove = self._perMove();
+      var idxVelocity = (velocity / trackSizePx) * per;
+      var flickPower = self.options.flickPower || 600;
+      var flickDeltaIdx = idxVelocity * (flickPower / 100);
+      if (self.isRTL) flickDeltaIdx = -flickDeltaIdx;
+      var currentTransformIndex = self._lastAppliedIndex != null ? self._lastAppliedIndex : self.index;
+      var targetRaw = currentTransformIndex + flickDeltaIdx;
+      var maxJump = (self.options.flickMaxPages || 1) * per;
+      if (self.cloneCount) maxJump = Math.min(maxJump, self.cloneCount);
+      targetRaw = Math.max(startIndex - maxJump, Math.min(startIndex + maxJump, targetRaw));
+      var target;
+      if (self.options.dragFree) target = targetRaw;
+      else target = Math.round(targetRaw / perMove) * perMove;
+      self._moveTo(target, true);
     }
     track.addEventListener('mousedown', pointerDown);
     global.addEventListener('mousemove', pointerMove);
@@ -590,21 +711,97 @@
     track.addEventListener('touchmove', pointerMove, { passive: false });
     track.addEventListener('touchend', pointerUp);
   };
-  SliderBit.prototype.next = function () { this.goTo(this.index + this._perMove()); };
-  SliderBit.prototype.prev = function () { this.goTo(this.index - this._perMove()); };
-  SliderBit.prototype.goTo = function (i) {
-    var len = this.slides.length;
-    if (this.options.loop) this.index = ((i % len) + len) % len;
-    else this.index = Math.max(0, Math.min(i, len - (this.options.perPage || 1)));
-    this._render(true);
+  SliderBit.prototype.next = function () { this._moveTo(this.index + this._perMove(), true); };
+  SliderBit.prototype.prev = function () { this._moveTo(this.index - this._perMove(), true); };
+  SliderBit.prototype.goTo = function (target) {
+    if (!this.cloneCount) {
+      var len = this.slides.length;
+      var resolved;
+      if (this.options.loop) resolved = ((target % len) + len) % len;
+      else resolved = Math.max(0, Math.min(target, len - (this.options.perPage || 1)));
+      this._moveTo(resolved, true);
+      return;
+    }
+    var base = this.cloneCount + target;
+    var candidates = [base - this.realCount, base, base + this.realCount];
+    var best = candidates[0];
+    var self = this;
+    candidates.forEach(function (c) { if (Math.abs(c - self.index) < Math.abs(best - self.index)) best = c; });
+    this._moveTo(best, true);
+  };
+  SliderBit.prototype._moveTo = function (target, animate) {
+    if (!this.cloneCount) {
+      if (this.options.loop) {
+        var len = this.slides.length;
+        target = ((target % len) + len) % len;
+      } else {
+        target = Math.max(0, Math.min(target, this.slides.length - (this.options.perPage || 1)));
+      }
+    }
+    this.index = target;
+    this._render(animate);
     this._announce();
+    this._fireChange();
+    if (animate && this.cloneCount) this._armSnapBack();
+  };
+  SliderBit.prototype._armSnapBack = function () {
+    var self = this;
+    clearTimeout(this._snapTimer);
+    if (this._snapListener) this.track.removeEventListener('transitionend', this._snapListener);
+    this._snapListener = function (e) {
+      if (e.target !== self.track) return;
+      cleanup();
+      self._snapBack();
+    };
+    this.track.addEventListener('transitionend', this._snapListener);
+    function cleanup() {
+      clearTimeout(self._snapTimer);
+      if (self._snapListener) self.track.removeEventListener('transitionend', self._snapListener);
+      self._snapListener = null;
+    }
+    this._snapTimer = setTimeout(function () { cleanup(); self._snapBack(); }, (this.options.speed || 500) + 80);
+  };
+  SliderBit.prototype._snapBack = function () {
+    if (!this.cloneCount) return;
+    var real = this._realIndex();
+    var normalized = this.cloneCount + real;
+    if (normalized !== this.index) { this.index = normalized; this._render(false); }
+  };
+  SliderBit.prototype._realIndex = function () {
+    if (!this.cloneCount) return this.index;
+    var r = (this.index - this.cloneCount) % this.realCount;
+    return r < 0 ? r + this.realCount : r;
+  };
+  SliderBit.prototype._slideRealIndex = function (slide) {
+    return typeof slide.__sbRealIndex === 'number' ? slide.__sbRealIndex : this.slides.indexOf(slide);
   };
   SliderBit.prototype._announce = function () {
-    if (this.liveRegion) this.liveRegion.textContent = 'Slide ' + (this.index + 1) + ' of ' + this.slides.length;
+    if (this.liveRegion) {
+      var realIdx = this._realIndex();
+      var count = this.cloneCount ? this.realCount : this.slides.length;
+      this.liveRegion.textContent = 'Slide ' + (realIdx + 1) + ' of ' + count;
+    }
+  };
+  SliderBit.prototype._onChange = function (cb) { this._changeCallbacks.push(cb); };
+  SliderBit.prototype._fireChange = function () {
+    var real = this._realIndex();
+    this._changeCallbacks.forEach(function (cb) { cb(real); });
+  };
+  SliderBit.prototype._offsetForIndex = function (idx) {
+    var per = this.options.perPage || 1;
+    var offset = idx * (100 / per);
+    if (this.options.focus === 'center' && per > 1) offset -= (100 - (100 / per)) / 2;
+    return offset;
+  };
+  SliderBit.prototype._applyTransform = function (idx, animate) {
+    this._lastAppliedIndex = idx;
+    var offset = this._offsetForIndex(idx);
+    var signed = this.isVertical ? -offset : (this.isRTL ? offset : -offset);
+    this.track.style.transition = animate ? 'transform var(--sb-speed) var(--sb-easing)' : 'none';
+    this.track.style.transform = this.isVertical ? 'translateY(' + signed + '%)' : 'translateX(' + signed + '%)';
   };
   SliderBit.prototype._render = function (animate) {
     var per = this.options.perPage || 1;
-    var track = this.track;
     if (this.isFade) {
       this.slides.forEach(function (slide, i) {
         slide.style.transition = animate ? 'opacity var(--sb-speed) var(--sb-easing)' : 'none';
@@ -616,12 +813,11 @@
       this.slides.forEach(function (slide) {
         slide.style.flex = '0 0 calc(' + slideSize + '% - (var(--sb-gap) * ' + (per - 1) + ' / ' + per + '))';
       });
-      var offset = this.index * (100 / per);
-      track.style.transition = animate ? 'transform var(--sb-speed) var(--sb-easing)' : 'none';
-      track.style.transform = this.isVertical ? 'translateY(-' + offset + '%)' : 'translateX(-' + offset + '%)';
+      this._applyTransform(this.index, animate);
     }
     if (this.pagination) {
-      var activePage = Math.floor(this.index / this._perMove());
+      var realIdx = this._realIndex();
+      var activePage = Math.floor(realIdx / this._perMove());
       Array.prototype.forEach.call(this.pagination.children, function (dot, i) {
         dot.classList.toggle('is-active', i === activePage);
         dot.setAttribute('aria-selected', i === activePage ? 'true' : 'false');
@@ -629,6 +825,27 @@
     }
     if (this.prevBtn) this.prevBtn.disabled = !this.options.loop && this.index <= 0;
     if (this.nextBtn) this.nextBtn.disabled = !this.options.loop && this.index >= this.slides.length - per;
+    this._updateA11y();
+  };
+  SliderBit.prototype._updateA11y = function () {
+    var per = this.options.perPage || 1;
+    var start = this.index;
+    var end = this.index + per - 1;
+    this.slides.forEach(function (slide, i) {
+      var visible = i >= start && i <= end;
+      slide.setAttribute('aria-hidden', visible && !slide.classList.contains('slider-bit__slide--clone') ? 'false' : 'true');
+      var focusables = slide.querySelectorAll(FOCUSABLE_SELECTOR);
+      Array.prototype.forEach.call(focusables, function (node) {
+        if (!visible) {
+          if (!node.hasAttribute('data-sb-prev-tabindex')) node.setAttribute('data-sb-prev-tabindex', node.getAttribute('tabindex') || '');
+          node.setAttribute('tabindex', '-1');
+        } else if (node.hasAttribute('data-sb-prev-tabindex')) {
+          var prev = node.getAttribute('data-sb-prev-tabindex');
+          if (prev) node.setAttribute('tabindex', prev); else node.removeAttribute('tabindex');
+          node.removeAttribute('data-sb-prev-tabindex');
+        }
+      });
+    });
   };
   SliderBit.prototype.play = function () {
     var self = this;
@@ -638,7 +855,39 @@
   SliderBit.prototype.pause = function () {
     if (this._autoplayTimer) { clearInterval(this._autoplayTimer); this._autoplayTimer = null; }
   };
-  SliderBit.prototype.destroy = function () { this.pause(); delete this.el.__sliderBitInstance; };
+  SliderBit.prototype.destroy = function () { this.pause(); clearTimeout(this._snapTimer); delete this.el.__sliderBitInstance; };
+  SliderBit.prototype.sync = function (other, opts) {
+    opts = opts || {};
+    var self = this;
+    self._onChange(function (realIndex) {
+      if (other._syncing) return;
+      self._syncing = true; other.goTo(realIndex); self._syncing = false;
+    });
+    other._onChange(function (realIndex) {
+      if (self._syncing) return;
+      other._syncing = true; self.goTo(realIndex); other._syncing = false;
+    });
+    if (opts.nav) {
+      self.el.classList.add('slider-bit--nav');
+      var highlight = function (realIndex) {
+        self.slides.forEach(function (slide) {
+          slide.classList.toggle('is-active', self._slideRealIndex(slide) === realIndex);
+        });
+      };
+      self.slides.forEach(function (slide) {
+        if (slide.classList.contains('slider-bit__slide--clone')) return;
+        slide.setAttribute('tabindex', '0');
+        slide.setAttribute('role', 'button');
+        var activate = function () { other.goTo(self._slideRealIndex(slide)); };
+        slide.addEventListener('click', activate);
+        slide.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(); }
+        });
+      });
+      other._onChange(highlight);
+      highlight(other._realIndex());
+    }
+  };
   global.SliderBit = SliderBit;
 })(window);
 </script>
@@ -678,8 +927,8 @@
     loadIdBtn: document.getElementById('load-id-btn')
   };
 
-  var controlIds = ['perPage','gap','aspectRatio','direction','type','speed','loop','autoplay',
-    'interval','pauseOnHover','drag','keyboard','arrows','pagination','arrowColor','dotColorActive','radius'];
+  var controlIds = ['perPage','gap','aspectRatio','direction','focusCenter','type','speed','loop','autoplay',
+    'interval','pauseOnHover','drag','wheel','keyboard','arrows','pagination','arrowColor','dotColorActive','radius'];
   var controls = {};
   controlIds.forEach(function (id) { controls[id] = document.getElementById(id); });
 
@@ -792,6 +1041,7 @@
       perMove: 1, // move one slide at a time even when showing multiple per view (smoother feel)
       gap: Number(controls.gap.value) + 'px',
       aspectRatio: controls.aspectRatio.value,
+      focus: controls.focusCenter.checked ? 'center' : false,
       loop: controls.loop.checked,
       autoplay: controls.autoplay.checked,
       interval: Number(controls.interval.value),
@@ -800,6 +1050,7 @@
       arrows: controls.arrows.checked,
       pagination: controls.pagination.checked,
       drag: controls.drag.checked,
+      wheel: controls.wheel.checked,
       keyboard: controls.keyboard.checked,
       lazyLoad: true
     };
@@ -830,6 +1081,7 @@
       }
     }
     if (config.aspectRatio) controls.aspectRatio.value = config.aspectRatio;
+    controls.focusCenter.checked = config.focus === 'center';
     if (typeof config.loop === 'boolean') controls.loop.checked = config.loop;
     if (typeof config.autoplay === 'boolean') {
       controls.autoplay.checked = config.autoplay;
@@ -847,6 +1099,7 @@
     if (typeof config.arrows === 'boolean') controls.arrows.checked = config.arrows;
     if (typeof config.pagination === 'boolean') controls.pagination.checked = config.pagination;
     if (typeof config.drag === 'boolean') controls.drag.checked = config.drag;
+    if (typeof config.wheel === 'boolean') controls.wheel.checked = config.wheel;
     if (typeof config.keyboard === 'boolean') controls.keyboard.checked = config.keyboard;
     if (theme.arrowColor) controls.arrowColor.value = theme.arrowColor;
     if (theme.dotColorActive) controls.dotColorActive.value = theme.dotColorActive;
@@ -906,14 +1159,16 @@
   /* ---------- Embed code generation ---------- */
   var ENGINE_JS_SOURCE = document.querySelector('script:nth-of-type(1)').textContent;
   var ENGINE_CSS_SOURCE =
-    '.slider-bit{--sb-gap:1rem;--sb-padding:0;--sb-speed:500ms;--sb-easing:cubic-bezier(0.25,1,0.5,1);' +
+    '.slider-bit{--sb-gap:1rem;--sb-padding:0;--sb-peek-start:0px;--sb-peek-end:0px;--sb-speed:500ms;--sb-easing:cubic-bezier(0.25,1,0.5,1);' +
     '--sb-height:auto;--sb-aspect-ratio:16/9;--sb-arrow-size:2.5rem;--sb-arrow-color:#1a1a1a;' +
     '--sb-arrow-bg:rgba(255,255,255,0.85);--sb-arrow-bg-hover:#fff;--sb-dot-size:0.5rem;' +
     '--sb-dot-color:rgba(255,255,255,0.5);--sb-dot-color-active:#fff;--sb-radius:8px;position:relative;' +
     'width:100%;overflow:hidden;border-radius:var(--sb-radius);outline:none;box-sizing:border-box;padding:var(--sb-padding);}' +
     '.slider-bit *{box-sizing:border-box;}' +
-    '.slider-bit__track{display:flex;will-change:transform;height:var(--sb-height);aspect-ratio:var(--sb-aspect-ratio);}' +
+    '.slider-bit__track{display:flex;will-change:transform;height:var(--sb-height);aspect-ratio:var(--sb-aspect-ratio);' +
+    'padding-left:var(--sb-peek-start);padding-right:var(--sb-peek-end);}' +
     '.slider-bit__track--fade{position:relative;display:block;aspect-ratio:var(--sb-aspect-ratio);}' +
+    '.slider-bit__track--draggable{cursor:grab;}' +
     '.slider-bit__track--dragging{cursor:grabbing;}' +
     '.slider-bit__slide{flex-shrink:0;position:relative;margin-right:var(--sb-gap);overflow:hidden;border-radius:var(--sb-radius);}' +
     '.slider-bit__slide:last-child{margin-right:0;}' +
@@ -926,14 +1181,23 @@
     '.slider-bit__arrow:disabled{opacity:0.3;cursor:not-allowed;}' +
     '.slider-bit__arrow--prev{left:0.75rem;}' +
     '.slider-bit__arrow--next{right:0.75rem;}' +
-    '.slider-bit--vertical .slider-bit__track{flex-direction:column;}' +
+    '.slider-bit--vertical .slider-bit__track{flex-direction:column;padding-left:0;padding-right:0;' +
+    'padding-top:var(--sb-peek-start);padding-bottom:var(--sb-peek-end);}' +
     '.slider-bit--vertical .slider-bit__slide{margin-right:0;margin-bottom:var(--sb-gap);}' +
     '.slider-bit--vertical .slider-bit__arrow--prev{top:0.75rem;left:50%;transform:translateX(-50%) rotate(90deg);}' +
     '.slider-bit--vertical .slider-bit__arrow--next{bottom:0.75rem;top:auto;left:50%;transform:translateX(-50%) rotate(90deg);}' +
+    '.slider-bit--rtl .slider-bit__track{flex-direction:row-reverse;padding-left:var(--sb-peek-end);padding-right:var(--sb-peek-start);}' +
+    '.slider-bit--rtl .slider-bit__slide{margin-right:0;margin-left:var(--sb-gap);}' +
+    '.slider-bit--rtl .slider-bit__slide:last-child{margin-left:0;}' +
+    '.slider-bit--rtl .slider-bit__arrow--prev{left:auto;right:0.75rem;}' +
+    '.slider-bit--rtl .slider-bit__arrow--next{right:auto;left:0.75rem;}' +
     '.slider-bit__pagination{position:absolute;bottom:0.75rem;left:0;right:0;display:flex;justify-content:center;gap:0.5rem;z-index:2;}' +
     '.slider-bit__dot{width:var(--sb-dot-size);height:var(--sb-dot-size);border-radius:50%;border:none;padding:0;' +
     'background:var(--sb-dot-color);cursor:pointer;transition:background 150ms ease,transform 150ms ease;}' +
     '.slider-bit__dot.is-active{background:var(--sb-dot-color-active);transform:scale(1.25);}' +
+    '.slider-bit--nav .slider-bit__slide{cursor:pointer;opacity:0.5;transition:opacity 150ms ease;}' +
+    '.slider-bit--nav .slider-bit__slide.is-active{opacity:1;}' +
+    '.slider-bit--nav .slider-bit__slide:focus-visible{outline:2px solid var(--sb-dot-color-active);outline-offset:2px;}' +
     '.slider-bit__live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}' +
     '@media (prefers-reduced-motion: reduce){.slider-bit__track,.slider-bit__slide{transition:none !important;}}';
 

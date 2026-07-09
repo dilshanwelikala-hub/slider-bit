@@ -1,7 +1,7 @@
 /*!
- * Slider Bit v1.0.0
+ * Slider Bit v1.1.0
  * Lightweight, dependency-free slider/carousel for Webflow (or any site) embeds.
- * Inspired by Splide.js feature set. MIT-style, do whatever you want with it.
+ * Feature set inspired by Splide.js v4 (splidejs.com). MIT-style, do whatever you want with it.
  *
  * Usage:
  *   <div class="slider-bit" data-sliderbit-config='{"perPage":1,"arrows":true}'>
@@ -15,20 +15,30 @@
  *
  * Auto-initializes every element with class "slider-bit" on DOMContentLoaded.
  * Reads options from the data-sliderbit-config JSON attribute (all optional).
+ *
+ * Thumbnail/nav sync (declarative):
+ *   <div class="slider-bit" id="main" data-sliderbit-config='{"loop":true}'>...</div>
+ *   <div class="slider-bit" data-sliderbit-sync="#main" data-sliderbit-nav
+ *        data-sliderbit-config='{"perPage":5,"pagination":false,"arrows":false}'>...</div>
+ *   The second slider becomes a clickable, highlighted thumbnail strip for the first.
  */
 (function (global) {
   'use strict';
 
   var DEFAULTS = {
-    type: 'slide',        // 'slide' | 'fade'
-    direction: 'ltr',      // 'ltr' | 'vertical'
+    type: 'slide',          // 'slide' | 'fade'
+    direction: 'ltr',        // 'ltr' | 'rtl' | 'vertical'
     perPage: 1,
-    perMove: null,         // null = move by perPage (page-based); set a number to override
+    perMove: null,           // null = move by perPage (page-based); set a number to override
     gap: '1rem',
-    padding: '0',
-    height: '',            // e.g. '400px'; if empty, aspect ratio is used
+    padding: '0',            // outer container inset (frame around the whole slider)
+    peek: 0,                 // track-edge inset so neighboring slides peek in (number/string = both sides,
+                              // or { start, end }) -- combine with perPage:1 + focus:'center' for a centered
+                              // carousel look
+    focus: false,            // false | 'center' -- centers the active slide when perPage > 1
+    height: '',              // e.g. '400px'; if empty, aspect ratio is used
     aspectRatio: '16/9',
-    loop: true,
+    loop: true,              // seamless infinite loop (real DOM clones) for type:'slide'; modulo wrap for fade
     autoplay: false,
     interval: 4000,
     pauseOnHover: true,
@@ -37,13 +47,20 @@
     arrows: true,
     pagination: true,
     drag: true,
+    dragFree: false,         // free momentum scroll without snapping to a slide boundary
+    flickPower: 600,         // higher = a flick travels further
+    flickMaxPages: 1,        // caps how many "pages" (perPage slides) a single flick can jump
+    wheel: false,            // enable mouse-wheel / trackpad navigation
+    wheelMinThreshold: 40,   // ignore wheel deltas smaller than this (avoids accidental triggers)
+    wheelSleep: 700,         // ms to ignore further wheel input after triggering a move
     keyboard: true,
     lazyLoad: true,
     startIndex: 0,
-    breakpoints: {}        // { 768: { perPage: 1 }, 1024: { perPage: 3 } }
+    breakpoints: {}          // { 768: { perPage: 1 }, 1024: { perPage: 3 } }
   };
 
   var instanceId = 0;
+  var FOCUSABLE_SELECTOR = 'a[href], button, input, select, textarea, [tabindex]';
 
   function SliderBit(el, userOptions) {
     if (!el) return;
@@ -63,11 +80,14 @@
     this.options = Object.assign({}, this.baseOptions);
     this.track = el.querySelector('.slider-bit__track');
     this.slides = this.track ? Array.prototype.slice.call(this.track.children) : [];
-    this.index = this.options.startIndex || 0;
     this.isFade = this.options.type === 'fade';
     this.isVertical = this.options.direction === 'vertical';
+    this.isRTL = this.options.direction === 'rtl';
     this._autoplayTimer = null;
     this._dragging = false;
+    this.cloneCount = 0;
+    this.realCount = this.slides.length;
+    this._changeCallbacks = [];
 
     if (!this.track || this.slides.length === 0) {
       console.warn('SliderBit: no .slider-bit__track / .slider-bit__slide found in', el);
@@ -82,22 +102,32 @@
     if (this.options.autoplay) this.play();
   }
 
+  // -------------------------------------------------------------------
+  // Build / clones
+  // -------------------------------------------------------------------
+
   SliderBit.prototype._build = function () {
     var el = this.el;
     el.classList.add('slider-bit');
     if (this.isVertical) el.classList.add('slider-bit--vertical');
+    if (this.isRTL) el.classList.add('slider-bit--rtl');
     el.setAttribute('role', 'region');
     el.setAttribute('aria-roledescription', 'carousel');
     if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
 
     this.track.classList.add('slider-bit__track');
     if (this.isFade) this.track.classList.add('slider-bit__track--fade');
+    if (this.options.drag) this.track.classList.add('slider-bit__track--draggable');
+
+    this._buildClones();
 
     this.slides.forEach(function (slide, i) {
       slide.classList.add('slider-bit__slide');
       slide.setAttribute('role', 'group');
       slide.setAttribute('aria-roledescription', 'slide');
-      slide.setAttribute('aria-label', (i + 1) + ' of ' + this.slides.length);
+      var realI = typeof slide.__sbRealIndex === 'number' ? slide.__sbRealIndex : i;
+      var total = this.cloneCount ? this.realCount : this.slides.length;
+      slide.setAttribute('aria-label', (realI + 1) + ' of ' + total);
       var img = slide.querySelector('img');
       if (img && this.options.lazyLoad && !img.hasAttribute('loading')) {
         img.setAttribute('loading', 'lazy');
@@ -138,6 +168,67 @@
     el.style.setProperty('--sb-easing', this.options.easing);
     el.style.setProperty('--sb-gap', this._toCss(this.options.gap));
     el.style.setProperty('--sb-padding', this._toCss(this.options.padding));
+
+    var peek = this._resolvePeek();
+    el.style.setProperty('--sb-peek-start', this._toCss(peek.start));
+    el.style.setProperty('--sb-peek-end', this._toCss(peek.end));
+  };
+
+  SliderBit.prototype._resolvePeek = function () {
+    var peek = this.options.peek;
+    if (peek && typeof peek === 'object') {
+      return { start: peek.start || 0, end: peek.end || 0 };
+    }
+    return { start: peek || 0, end: peek || 0 };
+  };
+
+  /**
+   * Generates real DOM clones at both ends of the track so that, combined with
+   * a transitionend snap-back, dragging or paging past the last slide continues
+   * seamlessly into the first (and vice versa) instead of visually rewinding.
+   * Only used for type:'slide' -- fade loops via simple index wrap, no clones needed.
+   */
+  SliderBit.prototype._buildClones = function () {
+    var opts = this.options;
+    var eligible = opts.loop && opts.type !== 'fade' && this.slides.length > 1;
+
+    if (!eligible) {
+      this.cloneCount = 0;
+      this.slides.forEach(function (s, i) { s.__sbRealIndex = i; });
+      this.index = opts.startIndex || 0;
+      return;
+    }
+
+    var per = opts.perPage || 1;
+    var count = Math.min(this.slides.length, Math.max(per * 2, 2));
+    var real = this.slides.slice();
+    real.forEach(function (node, i) { node.__sbRealIndex = i; });
+
+    var headSrc = real.slice(real.length - count);
+    var headStartIndex = real.length - count;
+    var tailSrc = real.slice(0, count);
+
+    var head = headSrc.map(function (node, i) { return cloneNode(node, headStartIndex + i); });
+    var tail = tailSrc.map(function (node, i) { return cloneNode(node, i); });
+
+    var track = this.track;
+    var firstReal = real[0];
+    head.forEach(function (c) { track.insertBefore(c, firstReal); });
+    tail.forEach(function (c) { track.appendChild(c); });
+
+    this.cloneCount = count;
+    this.realCount = real.length;
+    this.slides = head.concat(real, tail);
+    this.index = count + (opts.startIndex || 0);
+
+    function cloneNode(node, realIdx) {
+      var clone = node.cloneNode(true);
+      clone.classList.add('slider-bit__slide--clone');
+      clone.setAttribute('aria-hidden', 'true');
+      clone.removeAttribute('id');
+      clone.__sbRealIndex = realIdx;
+      return clone;
+    }
   };
 
   SliderBit.prototype._perMove = function () {
@@ -182,7 +273,8 @@
 
   SliderBit.prototype._pageCount = function () {
     var per = this._perMove();
-    return Math.max(1, Math.ceil(this.slides.length / per));
+    var count = this.cloneCount ? this.realCount : this.slides.length;
+    return Math.max(1, Math.ceil(count / per));
   };
 
   SliderBit.prototype._applyResponsive = function () {
@@ -218,13 +310,19 @@
     };
   }
 
+  // -------------------------------------------------------------------
+  // Events: keyboard, autoplay hover, drag, wheel
+  // -------------------------------------------------------------------
+
   SliderBit.prototype._bindEvents = function () {
     var self = this;
 
     if (this.options.keyboard) {
       this.el.addEventListener('keydown', function (e) {
-        if (e.key === 'ArrowRight') self.next();
-        if (e.key === 'ArrowLeft') self.prev();
+        var forwardKey = self.isVertical ? 'ArrowDown' : (self.isRTL ? 'ArrowLeft' : 'ArrowRight');
+        var backwardKey = self.isVertical ? 'ArrowUp' : (self.isRTL ? 'ArrowRight' : 'ArrowLeft');
+        if (e.key === forwardKey) self.next();
+        if (e.key === backwardKey) self.prev();
       });
     }
 
@@ -237,40 +335,130 @@
       this._bindDrag();
     }
 
+    if (this.options.wheel) {
+      this._bindWheel();
+    }
+
     global.addEventListener('resize', debounce(function () { self._render(false); }, 150));
   };
 
+  SliderBit.prototype._bindWheel = function () {
+    var self = this;
+    var locked = false;
+    this.el.addEventListener('wheel', function (e) {
+      var delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (Math.abs(delta) < (self.options.wheelMinThreshold || 40)) return;
+      e.preventDefault();
+      if (locked) return;
+      if (delta > 0) self.next(); else self.prev();
+      locked = true;
+      setTimeout(function () { locked = false; }, self.options.wheelSleep || 700);
+    }, { passive: false });
+  };
+
+  /**
+   * Drag with live pixel-accurate follow + velocity-based "flick" on release
+   * (a fast short swipe can jump multiple slides, matching native app carousels).
+   */
   SliderBit.prototype._bindDrag = function () {
     var self = this;
-    var startX = 0, startY = 0, deltaX = 0, deltaY = 0, dragging = false;
+    var startX = 0, startY = 0, lastAxis = 0, lastTime = 0, velocity = 0;
+    var dragging = false, committed = false;
+    var trackSizePx = 0;
+    var startIndex = 0;
     var track = this.track;
 
+    function axisOf(e) {
+      var p = e.touches ? e.touches[0] : e;
+      return self.isVertical ? p.clientY : p.clientX;
+    }
+    function crossAxisOf(e) {
+      var p = e.touches ? e.touches[0] : e;
+      return self.isVertical ? p.clientX : p.clientY;
+    }
+    function trackRectSize() {
+      var r = track.getBoundingClientRect();
+      return (self.isVertical ? r.height : r.width) || 1;
+    }
+
     function pointerDown(e) {
-      dragging = true;
-      self._dragging = true;
+      if (dragging) return;
       var p = e.touches ? e.touches[0] : e;
       startX = p.clientX;
       startY = p.clientY;
-      deltaX = 0; deltaY = 0;
-      track.classList.add('slider-bit__track--dragging');
+      lastAxis = axisOf(e);
+      lastTime = Date.now();
+      velocity = 0;
+      dragging = true;
+      committed = false;
+      startIndex = self.index;
+      trackSizePx = trackRectSize();
     }
+
     function pointerMove(e) {
       if (!dragging) return;
-      var p = e.touches ? e.touches[0] : e;
-      deltaX = p.clientX - startX;
-      deltaY = p.clientY - startY;
-      if (Math.abs(deltaX) > Math.abs(deltaY) && e.cancelable) e.preventDefault();
+      var axis = axisOf(e);
+      var cross = crossAxisOf(e);
+      var mainDelta = axis - (self.isVertical ? startY : startX);
+      var crossDelta = cross - (self.isVertical ? startX : startY);
+
+      if (!committed) {
+        if (Math.abs(mainDelta) < 5 && Math.abs(crossDelta) < 5) return;
+        if (Math.abs(mainDelta) <= Math.abs(crossDelta)) {
+          dragging = false; // this is a scroll gesture on the cross axis, let the browser handle it
+          return;
+        }
+        committed = true;
+        self._dragging = true;
+        track.classList.add('slider-bit__track--dragging');
+      }
+
+      if (e.cancelable) e.preventDefault();
+
+      var now = Date.now();
+      var dt = now - lastTime;
+      if (dt > 0) velocity = (axis - lastAxis) / dt;
+      lastAxis = axis;
+      lastTime = now;
+
+      var per = self.options.perPage || 1;
+      var deltaIdx = (mainDelta / trackSizePx) * per;
+      var rawIndex = self.isRTL ? startIndex + deltaIdx : startIndex - deltaIdx;
+      self._applyTransform(rawIndex, false);
     }
+
     function pointerUp() {
       if (!dragging) return;
       dragging = false;
+
+      if (!committed) return;
+      committed = false;
       self._dragging = false;
       track.classList.remove('slider-bit__track--dragging');
-      var threshold = 40;
-      var delta = self.isVertical ? deltaY : deltaX;
-      if (delta > threshold) self.prev();
-      else if (delta < -threshold) self.next();
-      else self._render(false);
+
+      var per = self.options.perPage || 1;
+      var perMove = self._perMove();
+      var idxVelocity = (velocity / trackSizePx) * per; // "slide widths" per ms
+      var flickPower = self.options.flickPower || 600;
+      var flickDeltaIdx = idxVelocity * (flickPower / 100);
+      if (self.isRTL) flickDeltaIdx = -flickDeltaIdx;
+
+      // Current raw (fractional) index from the live drag-follow transform.
+      var currentTransformIndex = self._lastAppliedIndex != null ? self._lastAppliedIndex : self.index;
+      var targetRaw = currentTransformIndex + flickDeltaIdx;
+
+      var maxJump = (self.options.flickMaxPages || 1) * per;
+      if (self.cloneCount) maxJump = Math.min(maxJump, self.cloneCount);
+      targetRaw = Math.max(startIndex - maxJump, Math.min(startIndex + maxJump, targetRaw));
+
+      var target;
+      if (self.options.dragFree) {
+        target = targetRaw;
+      } else {
+        target = Math.round(targetRaw / perMove) * perMove;
+      }
+
+      self._moveTo(target, true);
     }
 
     track.addEventListener('mousedown', pointerDown);
@@ -281,34 +469,157 @@
     track.addEventListener('touchend', pointerUp);
   };
 
+  // -------------------------------------------------------------------
+  // Navigation
+  // -------------------------------------------------------------------
+
   SliderBit.prototype.next = function () {
-    this.goTo(this.index + this._perMove());
+    this._moveTo(this.index + this._perMove(), true);
   };
 
   SliderBit.prototype.prev = function () {
-    this.goTo(this.index - this._perMove());
+    this._moveTo(this.index - this._perMove(), true);
   };
 
-  SliderBit.prototype.goTo = function (i) {
-    var len = this.slides.length;
-    if (this.options.loop) {
-      this.index = ((i % len) + len) % len;
-    } else {
-      this.index = Math.max(0, Math.min(i, len - (this.options.perPage || 1)));
+  /**
+   * Public navigation API. `target` is always a REAL slide index (0-based,
+   * ignoring clones) -- this is what pagination dots, sync partners, and
+   * external callers use.
+   */
+  SliderBit.prototype.goTo = function (target) {
+    if (!this.cloneCount) {
+      var len = this.slides.length;
+      var resolved;
+      if (this.options.loop) {
+        resolved = ((target % len) + len) % len;
+      } else {
+        resolved = Math.max(0, Math.min(target, len - (this.options.perPage || 1)));
+      }
+      this._moveTo(resolved, true);
+      return;
     }
-    this._render(true);
+
+    // Pick whichever cycle (previous/current/next lap through the real slides)
+    // lands closest to where we are now, so e.g. paging from the last page back
+    // to page 0 continues forward through the clones instead of reversing.
+    var base = this.cloneCount + target;
+    var candidates = [base - this.realCount, base, base + this.realCount];
+    var best = candidates[0];
+    var self = this;
+    candidates.forEach(function (c) {
+      if (Math.abs(c - self.index) < Math.abs(best - self.index)) best = c;
+    });
+    this._moveTo(best, true);
+  };
+
+  /**
+   * Internal mover: `target` is an index in "extended" (clone-inclusive) space
+   * when clones exist, otherwise a plain slide index.
+   */
+  SliderBit.prototype._moveTo = function (target, animate) {
+    if (!this.cloneCount) {
+      if (this.options.loop) {
+        var len = this.slides.length;
+        target = ((target % len) + len) % len;
+      } else {
+        target = Math.max(0, Math.min(target, this.slides.length - (this.options.perPage || 1)));
+      }
+    }
+
+    this.index = target;
+    this._render(animate);
     this._announce();
+    this._fireChange();
+
+    if (animate && this.cloneCount) this._armSnapBack();
+  };
+
+  SliderBit.prototype._armSnapBack = function () {
+    var self = this;
+    clearTimeout(this._snapTimer);
+    if (this._snapListener) this.track.removeEventListener('transitionend', this._snapListener);
+
+    this._snapListener = function (e) {
+      if (e.target !== self.track) return;
+      cleanup();
+      self._snapBack();
+    };
+    this.track.addEventListener('transitionend', this._snapListener);
+
+    function cleanup() {
+      clearTimeout(self._snapTimer);
+      if (self._snapListener) self.track.removeEventListener('transitionend', self._snapListener);
+      self._snapListener = null;
+    }
+
+    this._snapTimer = setTimeout(function () {
+      cleanup();
+      self._snapBack();
+    }, (this.options.speed || 500) + 80);
+  };
+
+  SliderBit.prototype._snapBack = function () {
+    if (!this.cloneCount) return;
+    var real = this._realIndex();
+    var normalized = this.cloneCount + real;
+    if (normalized !== this.index) {
+      this.index = normalized;
+      this._render(false);
+    }
+  };
+
+  SliderBit.prototype._realIndex = function () {
+    if (!this.cloneCount) return this.index;
+    var r = (this.index - this.cloneCount) % this.realCount;
+    return r < 0 ? r + this.realCount : r;
+  };
+
+  SliderBit.prototype._slideRealIndex = function (slide) {
+    return typeof slide.__sbRealIndex === 'number' ? slide.__sbRealIndex : this.slides.indexOf(slide);
   };
 
   SliderBit.prototype._announce = function () {
     if (this.liveRegion) {
-      this.liveRegion.textContent = 'Slide ' + (this.index + 1) + ' of ' + this.slides.length;
+      var realIdx = this._realIndex();
+      var count = this.cloneCount ? this.realCount : this.slides.length;
+      this.liveRegion.textContent = 'Slide ' + (realIdx + 1) + ' of ' + count;
     }
+  };
+
+  SliderBit.prototype._onChange = function (cb) {
+    this._changeCallbacks.push(cb);
+  };
+
+  SliderBit.prototype._fireChange = function () {
+    var real = this._realIndex();
+    this._changeCallbacks.forEach(function (cb) { cb(real); });
+  };
+
+  // -------------------------------------------------------------------
+  // Rendering
+  // -------------------------------------------------------------------
+
+  SliderBit.prototype._offsetForIndex = function (idx) {
+    var per = this.options.perPage || 1;
+    var offset = idx * (100 / per);
+    if (this.options.focus === 'center' && per > 1) {
+      offset -= (100 - (100 / per)) / 2;
+    }
+    return offset;
+  };
+
+  SliderBit.prototype._applyTransform = function (idx, animate) {
+    this._lastAppliedIndex = idx;
+    var offset = this._offsetForIndex(idx);
+    var signed = this.isVertical ? -offset : (this.isRTL ? offset : -offset);
+    this.track.style.transition = animate ? 'transform var(--sb-speed) var(--sb-easing)' : 'none';
+    this.track.style.transform = this.isVertical
+      ? 'translateY(' + signed + '%)'
+      : 'translateX(' + signed + '%)';
   };
 
   SliderBit.prototype._render = function (animate) {
     var per = this.options.perPage || 1;
-    var track = this.track;
 
     if (this.isFade) {
       this.slides.forEach(function (slide, i) {
@@ -321,15 +632,12 @@
       this.slides.forEach(function (slide) {
         slide.style.flex = '0 0 calc(' + slideSize + '% - (var(--sb-gap) * ' + (per - 1) + ' / ' + per + '))';
       });
-      var offset = this.index * (100 / per);
-      track.style.transition = animate ? 'transform var(--sb-speed) var(--sb-easing)' : 'none';
-      track.style.transform = this.isVertical
-        ? 'translateY(-' + offset + '%)'
-        : 'translateX(-' + offset + '%)';
+      this._applyTransform(this.index, animate);
     }
 
     if (this.pagination) {
-      var activePage = Math.floor(this.index / this._perMove());
+      var realIdx = this._realIndex();
+      var activePage = Math.floor(realIdx / this._perMove());
       Array.prototype.forEach.call(this.pagination.children, function (dot, i) {
         dot.classList.toggle('is-active', i === activePage);
         dot.setAttribute('aria-selected', i === activePage ? 'true' : 'false');
@@ -338,6 +646,38 @@
 
     if (this.prevBtn) this.prevBtn.disabled = !this.options.loop && this.index <= 0;
     if (this.nextBtn) this.nextBtn.disabled = !this.options.loop && this.index >= this.slides.length - per;
+
+    this._updateA11y();
+  };
+
+  /**
+   * Keeps only the currently-visible slide(s) reachable by Tab / exposed to
+   * screen readers -- otherwise a link/button inside an offscreen (or cloned)
+   * slide would still be focusable in normal DOM order.
+   */
+  SliderBit.prototype._updateA11y = function () {
+    var per = this.options.perPage || 1;
+    var start = this.index;
+    var end = this.index + per - 1;
+
+    this.slides.forEach(function (slide, i) {
+      var visible = i >= start && i <= end;
+      slide.setAttribute('aria-hidden', visible && !slide.classList.contains('slider-bit__slide--clone') ? 'false' : 'true');
+
+      var focusables = slide.querySelectorAll(FOCUSABLE_SELECTOR);
+      Array.prototype.forEach.call(focusables, function (node) {
+        if (!visible) {
+          if (!node.hasAttribute('data-sb-prev-tabindex')) {
+            node.setAttribute('data-sb-prev-tabindex', node.getAttribute('tabindex') || '');
+          }
+          node.setAttribute('tabindex', '-1');
+        } else if (node.hasAttribute('data-sb-prev-tabindex')) {
+          var prev = node.getAttribute('data-sb-prev-tabindex');
+          if (prev) node.setAttribute('tabindex', prev); else node.removeAttribute('tabindex');
+          node.removeAttribute('data-sb-prev-tabindex');
+        }
+      });
+    });
   };
 
   SliderBit.prototype.play = function () {
@@ -355,10 +695,66 @@
 
   SliderBit.prototype.destroy = function () {
     this.pause();
+    clearTimeout(this._snapTimer);
     delete this.el.__sliderBitInstance;
   };
 
-  // ---------------------------------------------------------------------
+  // -------------------------------------------------------------------
+  // Sync: link two sliders (e.g. a main gallery + a thumbnail nav strip)
+  // -------------------------------------------------------------------
+
+  /**
+   * Bidirectionally syncs this slider with another. If opts.nav is true, this
+   * slider's slides become clickable/keyboard-activatable thumbnails that jump
+   * `other` to the clicked slide, and highlight (`is-active` class) to track
+   * whichever real slide `other` currently shows.
+   */
+  SliderBit.prototype.sync = function (other, opts) {
+    opts = opts || {};
+    var self = this;
+
+    self._onChange(function (realIndex) {
+      if (other._syncing) return;
+      self._syncing = true;
+      other.goTo(realIndex);
+      self._syncing = false;
+    });
+    other._onChange(function (realIndex) {
+      if (self._syncing) return;
+      other._syncing = true;
+      self.goTo(realIndex);
+      other._syncing = false;
+    });
+
+    if (opts.nav) {
+      self.el.classList.add('slider-bit--nav');
+
+      var highlight = function (realIndex) {
+        self.slides.forEach(function (slide) {
+          slide.classList.toggle('is-active', self._slideRealIndex(slide) === realIndex);
+        });
+      };
+
+      self.slides.forEach(function (slide) {
+        if (slide.classList.contains('slider-bit__slide--clone')) return;
+        slide.setAttribute('tabindex', '0');
+        slide.setAttribute('role', 'button');
+        var activate = function () { other.goTo(self._slideRealIndex(slide)); };
+        slide.addEventListener('click', activate);
+        slide.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            activate();
+          }
+        });
+      });
+
+      other._onChange(highlight);
+      highlight(other._realIndex());
+    }
+  };
+
+  // -------------------------------------------------------------------
   // Remote hydration: a container can skip inline markup entirely and just
   // carry a data-sliderbit-id. In that case we fetch its config + images
   // from the Slider Bit API (hosted alongside this script, or wherever
@@ -369,7 +765,7 @@
   //   <div class="slider-bit" data-sliderbit-id="abc123"></div>
   //   <link rel="stylesheet" href="https://your-site.netlify.app/sliderbit.css">
   //   <script src="https://your-site.netlify.app/sliderbit.js" defer></script>
-  // ---------------------------------------------------------------------
+  // -------------------------------------------------------------------
 
   var __scriptEl = (typeof document !== 'undefined') ? document.currentScript : null;
   var API_BASE = '';
@@ -389,7 +785,7 @@
       console.warn('SliderBit: no API base available (script must be loaded via <script src="..."> from your hosted domain, or set data-sliderbit-api on the container) — cannot load remote slider', id);
       return;
     }
-    fetch(apiBase + '/api/sliders/' + encodeURIComponent(id))
+    return fetch(apiBase + '/api/sliders/' + encodeURIComponent(id))
       .then(function (res) {
         if (!res.ok) throw new Error('failed to load slider "' + id + '" (HTTP ' + res.status + ')');
         return res.json();
@@ -416,14 +812,32 @@
   function initAll(root) {
     var scope = root || document;
     var nodes = scope.querySelectorAll('.slider-bit');
+    var built = [];
+
     Array.prototype.forEach.call(nodes, function (el) {
       var remoteId = el.getAttribute('data-sliderbit-id');
       if (remoteId && !el.querySelector('.slider-bit__track')) {
         hydrateRemote(el, remoteId);
       } else {
-        new SliderBit(el);
+        built.push(new SliderBit(el));
       }
     });
+
+    // Declarative sync/nav wiring for inline (non-remote) sliders, e.g.:
+    //   <div class="slider-bit" data-sliderbit-sync="#main" data-sliderbit-nav>...</div>
+    built.forEach(function (inst) {
+      var sel = inst.el.getAttribute('data-sliderbit-sync');
+      if (!sel || inst._synced) return;
+      var otherEl = scope.querySelector(sel) || document.querySelector(sel);
+      var other = otherEl && otherEl.__sliderBitInstance;
+      if (other && other !== inst && !other._synced) {
+        inst._synced = true;
+        other._synced = true;
+        inst.sync(other, { nav: inst.el.hasAttribute('data-sliderbit-nav') });
+      }
+    });
+
+    return built;
   }
 
   if (document.readyState === 'loading') {

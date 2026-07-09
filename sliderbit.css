@@ -1,5 +1,5 @@
 /*!
- * Slider Bit v1.0.0 — stylesheet
+ * Slider Bit v1.1.0 — stylesheet
  * Theme via CSS variables, e.g.:
  *   .slider-bit { --sb-arrow-color:#fff; --sb-arrow-bg:rgba(0,0,0,.4); --sb-dot-color:#fff; }
  */
@@ -7,6 +7,8 @@
 .slider-bit {
   --sb-gap: 1rem;
   --sb-padding: 0;
+  --sb-peek-start: 0px;
+  --sb-peek-end: 0px;
   --sb-speed: 500ms;
   --sb-easing: cubic-bezier(0.25, 1, 0.5, 1);
   --sb-height: auto;
@@ -38,12 +40,18 @@
   will-change: transform;
   height: var(--sb-height);
   aspect-ratio: var(--sb-aspect-ratio);
+  padding-left: var(--sb-peek-start);
+  padding-right: var(--sb-peek-end);
 }
 
 .slider-bit__track--fade {
   position: relative;
   display: block;
   aspect-ratio: var(--sb-aspect-ratio);
+}
+
+.slider-bit__track--draggable {
+  cursor: grab;
 }
 
 .slider-bit__track--dragging {
@@ -119,6 +127,10 @@
 
 .slider-bit--vertical .slider-bit__track {
   flex-direction: column;
+  padding-left: 0;
+  padding-right: 0;
+  padding-top: var(--sb-peek-start);
+  padding-bottom: var(--sb-peek-end);
 }
 
 .slider-bit--vertical .slider-bit__slide {
@@ -137,6 +149,32 @@
   top: auto;
   left: 50%;
   transform: translateX(-50%) rotate(90deg);
+}
+
+/* RTL: mirror slide order, gap, peek insets and arrow placement */
+.slider-bit--rtl .slider-bit__track {
+  flex-direction: row-reverse;
+  padding-left: var(--sb-peek-end);
+  padding-right: var(--sb-peek-start);
+}
+
+.slider-bit--rtl .slider-bit__slide {
+  margin-right: 0;
+  margin-left: var(--sb-gap);
+}
+
+.slider-bit--rtl .slider-bit__slide:last-child {
+  margin-left: 0;
+}
+
+.slider-bit--rtl .slider-bit__arrow--prev {
+  left: auto;
+  right: 0.75rem;
+}
+
+.slider-bit--rtl .slider-bit__arrow--next {
+  right: auto;
+  left: 0.75rem;
 }
 
 /* Pagination */
@@ -165,6 +203,22 @@
 .slider-bit__dot.is-active {
   background: var(--sb-dot-color-active);
   transform: scale(1.25);
+}
+
+/* Thumbnail / nav sync mode: dim inactive slides, highlight the active one */
+.slider-bit--nav .slider-bit__slide {
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 150ms ease;
+}
+
+.slider-bit--nav .slider-bit__slide.is-active {
+  opacity: 1;
+}
+
+.slider-bit--nav .slider-bit__slide:focus-visible {
+  outline: 2px solid var(--sb-dot-color-active);
+  outline-offset: 2px;
 }
 
 /* Accessibility: visually hidden live region */

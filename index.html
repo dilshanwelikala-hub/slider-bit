@@ -58,73 +58,7 @@
   }
   h2:first-child { margin-top: 0; }
 
-  /* Upload */
-  .dropzone {
-    border: 1.5px dashed var(--border);
-    border-radius: var(--radius);
-    padding: 1.5rem 1rem;
-    text-align: center;
-    cursor: pointer;
-    color: var(--text-dim);
-    font-size: 0.85rem;
-    transition: border-color 150ms ease, background 150ms ease;
-  }
-  .dropzone:hover, .dropzone.drag-over {
-    border-color: var(--accent);
-    background: rgba(108,140,255,0.06);
-    color: var(--text);
-  }
-  .dropzone input { display: none; }
-  .thumb-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
-  }
-  .thumb {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 0.4rem;
-    cursor: grab;
-  }
-  .thumb.dragging { opacity: 0.4; }
-  .thumb img {
-    width: 48px;
-    height: 48px;
-    object-fit: cover;
-    border-radius: 6px;
-    flex-shrink: 0;
-  }
-  .thumb .meta { flex: 1; min-width: 0; }
-  .thumb input[type=text] {
-    width: 100%;
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid transparent;
-    color: var(--text);
-    font-size: 0.78rem;
-    padding: 2px 0;
-  }
-  .thumb input[type=text]:focus {
-    outline: none;
-    border-bottom-color: var(--accent);
-  }
-  .thumb input[type=text]::placeholder { color: var(--text-dim); }
-  .thumb .remove {
-    background: none;
-    border: none;
-    color: var(--text-dim);
-    cursor: pointer;
-    font-size: 1rem;
-    padding: 0.2rem 0.4rem;
-    line-height: 1;
-  }
-  .thumb .remove:hover { color: var(--danger); }
-  .empty-hint { color: var(--text-dim); font-size: 0.8rem; margin-top: 0.6rem; }
+  .empty-hint { color: var(--text-dim); font-size: 0.8rem; margin-top: 0.6rem; line-height: 1.5; }
 
   /* Preview */
   .preview-wrap {
@@ -134,8 +68,9 @@
     justify-content: center;
     padding: 2rem;
     background: var(--panel);
-    min-width: 0;   /* grid items default to min-width:auto, which lets large images
-                       force this column wider than its track and overflow the page */
+    min-width: 0;   /* grid items default to min-width:auto, which lets oversized content
+                       (e.g. a wide aspect-ratio slide) force this column wider than its
+                       track and overflow the page */
     overflow: hidden;
   }
   .preview-stage {
@@ -267,6 +202,19 @@
 
   /* Live preview slider tweaks so it fits nicely regardless of user theme */
   #preview-slider { background: #000; max-width: 100%; }
+
+  /* Placeholder slides stand in for the user's own images in the preview */
+  .sb-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.85);
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
 </style>
 </head>
 <body>
@@ -277,26 +225,28 @@
   </div>
   <button class="primary" style="width:auto; margin:0; padding:0.6rem 1.1rem;" id="open-embed">Get Embed Code</button>
 </header>
-<p style="margin:0.35rem 1.5rem 0; color:var(--text-dim); font-size:0.82rem;">Upload images, configure your slider, copy the embed code into Webflow.</p>
+<p style="margin:0.35rem 1.5rem 0; color:var(--text-dim); font-size:0.82rem;">Configure your slider, then copy the embed code into Webflow — bring your own images (or a CMS Collection List), Slider Bit just handles the behavior.</p>
 
 <div class="layout">
 
-  <!-- LEFT: Images -->
+  <!-- LEFT: Preview + saved configs -->
   <div class="panel">
-    <h2>Images</h2>
-    <div class="field" style="margin-bottom:1rem;">
-      <label>Editing an existing slider?</label>
+    <h2>Preview</h2>
+    <p class="empty-hint" style="margin-top:0;">Slider Bit doesn't host your images — you use your own (already in Webflow, or a CMS Collection List). This preview uses placeholder slides just so you can see how your settings behave.</p>
+    <div class="field">
+      <label>Placeholder slides <span id="slideCount-val">5</span></label>
+      <input type="range" id="slideCount" min="1" max="12" step="1" value="5">
+    </div>
+
+    <h2>Saved configs</h2>
+    <p class="empty-hint" style="margin-top:0;">Optional: save these settings under a short ID so multiple pages can share them without re-pasting JSON.</p>
+    <div class="field">
+      <label>Load a saved config</label>
       <div style="display:flex; gap:0.4rem;">
-        <input type="text" id="load-id-input" placeholder="Paste slider ID">
+        <input type="text" id="load-id-input" placeholder="Paste config ID">
         <button type="button" id="load-id-btn" style="flex-shrink:0; background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:0.4rem 0.7rem; cursor:pointer; font-size:0.8rem;">Load</button>
       </div>
     </div>
-    <label class="dropzone" id="dropzone">
-      <input type="file" id="file-input" accept="image/*" multiple>
-      Drop images here or click to upload
-    </label>
-    <div class="thumb-grid" id="thumb-grid"></div>
-    <div class="empty-hint" id="empty-hint">No images yet — add at least one to see the preview.</div>
   </div>
 
   <!-- CENTER: Live preview -->
@@ -306,7 +256,7 @@
         <div class="slider-bit__track"></div>
       </div>
     </div>
-    <div class="preview-hint">Live preview — updates as you change settings.</div>
+    <div class="preview-hint">Live preview (placeholder slides) — updates as you change settings.</div>
   </div>
 
   <!-- RIGHT: Config -->
@@ -389,13 +339,17 @@
       <button id="close-modal">&times;</button>
     </div>
     <div class="modal-body">
-      <p id="embed-status">Publishing your slider…</p>
+      <p id="embed-status">Paste this into a Webflow Embed element, then replace the example slide with your own images (or point <code>.slider-bit__track</code> at a CMS Collection List instead — see the comment in the code).</p>
       <textarea id="embed-output" readonly></textarea>
       <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin-top:0.75rem;">
         <button class="copy-btn" id="copy-btn" style="margin-top:0;">Copy to clipboard</button>
         <button type="button" id="toggle-embed-mode" style="background:none; border:none; color:var(--text-dim); font-size:0.78rem; cursor:pointer; text-decoration:underline; padding:0;">Use self-contained code instead</button>
       </div>
-      <p id="slider-id-note" style="display:none; margin-top:0.75rem;">Slider ID: <code id="slider-id-value"></code> — paste this into "Editing an existing slider?" later to load it back up for edits.</p>
+      <div style="border-top:1px solid var(--border); margin-top:1rem; padding-top:1rem;">
+        <p style="margin-top:0;">Using these settings on more than one page? Save them under a short ID instead of re-pasting the JSON each time.</p>
+        <button type="button" id="save-config-btn" style="background:var(--panel-2); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:0.5rem 0.8rem; cursor:pointer; font-size:0.82rem;">Save config for reuse</button>
+        <p id="slider-id-note" style="display:none; margin-top:0.75rem;">Config ID: <code id="slider-id-value"></code> — paste this same ID into other embeds' <code>data-sliderbit-config-id</code>, or into "Load a saved config" later to edit it.</p>
+      </div>
     </div>
   </div>
 </div>
@@ -899,21 +853,14 @@
 (function () {
   'use strict';
 
-  var images = []; // { id, src (base64), alt }
-  var nextId = 1;
-  var currentSliderId = null;
+  var currentConfigId = null;
   var API_BASE = window.location.origin;
   var IS_FILE_PROTOCOL = window.location.protocol === 'file:';
-  var lastHostedCode = null;
-  var lastSelfContainedCode = null;
   var showingSelfContained = false;
 
   var els = {
-    dropzone: document.getElementById('dropzone'),
-    fileInput: document.getElementById('file-input'),
-    thumbGrid: document.getElementById('thumb-grid'),
-    emptyHint: document.getElementById('empty-hint'),
     previewSlider: document.getElementById('preview-slider'),
+    slideCount: document.getElementById('slideCount'),
     openEmbed: document.getElementById('open-embed'),
     modalBackdrop: document.getElementById('modal-backdrop'),
     closeModal: document.getElementById('close-modal'),
@@ -921,6 +868,7 @@
     copyBtn: document.getElementById('copy-btn'),
     embedStatus: document.getElementById('embed-status'),
     toggleEmbedMode: document.getElementById('toggle-embed-mode'),
+    saveConfigBtn: document.getElementById('save-config-btn'),
     sliderIdNote: document.getElementById('slider-id-note'),
     sliderIdValue: document.getElementById('slider-id-value'),
     loadIdInput: document.getElementById('load-id-input'),
@@ -932,105 +880,10 @@
   var controls = {};
   controlIds.forEach(function (id) { controls[id] = document.getElementById(id); });
 
-  function escapeHtml(str) {
-    return String(str).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
-
-  /* ---------- Image upload ---------- */
-  els.dropzone.addEventListener('click', function (e) {
-    if (e.target !== els.fileInput) els.fileInput.click();
+  els.slideCount.addEventListener('input', function () {
+    document.getElementById('slideCount-val').textContent = els.slideCount.value;
+    renderPreview();
   });
-  els.dropzone.addEventListener('dragover', function (e) {
-    e.preventDefault();
-    els.dropzone.classList.add('drag-over');
-  });
-  els.dropzone.addEventListener('dragleave', function () {
-    els.dropzone.classList.remove('drag-over');
-  });
-  els.dropzone.addEventListener('drop', function (e) {
-    e.preventDefault();
-    els.dropzone.classList.remove('drag-over');
-    handleFiles(e.dataTransfer.files);
-  });
-  els.fileInput.addEventListener('change', function (e) {
-    handleFiles(e.target.files);
-    els.fileInput.value = '';
-  });
-
-  function handleFiles(fileList) {
-    Array.prototype.forEach.call(fileList, function (file) {
-      if (!file.type.startsWith('image/')) return;
-      var reader = new FileReader();
-      reader.onload = function (e) {
-        images.push({ id: nextId++, src: e.target.result, alt: file.name.replace(/\.[^.]+$/, '') });
-        renderThumbs();
-        renderPreview();
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-
-  function renderThumbs() {
-    els.emptyHint.style.display = images.length ? 'none' : 'block';
-    els.thumbGrid.innerHTML = '';
-    images.forEach(function (img, index) {
-      var row = document.createElement('div');
-      row.className = 'thumb';
-      row.draggable = true;
-      row.dataset.id = img.id;
-
-      var thumbImg = document.createElement('img');
-      thumbImg.src = img.src;
-      row.appendChild(thumbImg);
-
-      var meta = document.createElement('div');
-      meta.className = 'meta';
-      var altInput = document.createElement('input');
-      altInput.type = 'text';
-      altInput.placeholder = 'Alt text';
-      altInput.value = img.alt;
-      altInput.addEventListener('input', function () {
-        img.alt = altInput.value;
-        renderPreview();
-      });
-      meta.appendChild(altInput);
-      row.appendChild(meta);
-
-      var removeBtn = document.createElement('button');
-      removeBtn.className = 'remove';
-      removeBtn.innerHTML = '&times;';
-      removeBtn.title = 'Remove';
-      removeBtn.addEventListener('click', function () {
-        images.splice(index, 1);
-        renderThumbs();
-        renderPreview();
-      });
-      row.appendChild(removeBtn);
-
-      row.addEventListener('dragstart', function () {
-        row.classList.add('dragging');
-        row.dataset.dragIndex = index;
-      });
-      row.addEventListener('dragend', function () {
-        row.classList.remove('dragging');
-      });
-      row.addEventListener('dragover', function (e) { e.preventDefault(); });
-      row.addEventListener('drop', function (e) {
-        e.preventDefault();
-        var fromIndex = Number(document.querySelector('.thumb.dragging') ? document.querySelector('.thumb.dragging').dataset.dragIndex : index);
-        var toIndex = index;
-        if (fromIndex === toIndex || isNaN(fromIndex)) return;
-        var moved = images.splice(fromIndex, 1)[0];
-        images.splice(toIndex, 0, moved);
-        renderThumbs();
-        renderPreview();
-      });
-
-      els.thumbGrid.appendChild(row);
-    });
-  }
 
   /* ---------- Config ---------- */
   function currentConfig() {
@@ -1123,11 +976,17 @@
     document.getElementById('interval-field').style.display = controls.autoplay.checked ? 'block' : 'none';
   });
 
-  /* ---------- Live preview ---------- */
-  function buildSlidesHtml() {
-    return images.map(function (img) {
-      return '<div class="slider-bit__slide"><img src="' + img.src + '" alt="' + escapeHtml(img.alt) + '"></div>';
-    }).join('');
+  /* ---------- Live preview (placeholder slides) ---------- */
+  var PLACEHOLDER_HUES = [212, 262, 152, 22, 322, 192, 42, 282];
+
+  function buildPlaceholderSlidesHtml(count) {
+    var html = '';
+    for (var i = 0; i < count; i++) {
+      var hue = PLACEHOLDER_HUES[i % PLACEHOLDER_HUES.length];
+      html += '<div class="slider-bit__slide"><div class="sb-placeholder" style="background:linear-gradient(135deg, hsl(' +
+        hue + ',55%,42%), hsl(' + hue + ',55%,24%));">Slide ' + (i + 1) + '</div></div>';
+    }
+    return html;
   }
 
   function applyTheme(el, theme) {
@@ -1140,20 +999,18 @@
     var el = els.previewSlider;
     var config = currentConfig();
     var theme = currentTheme();
+    var count = Number(els.slideCount.value) || 1;
 
     el.className = 'slider-bit';
     el.removeAttribute('style');
-    el.innerHTML = '<div class="slider-bit__track">' + buildSlidesHtml() + '</div>';
+    el.innerHTML = '<div class="slider-bit__track">' + buildPlaceholderSlidesHtml(count) + '</div>';
     el.setAttribute('data-sliderbit-config', JSON.stringify(config));
     delete el.__sliderBitInstance;
 
     applyTheme(el, theme);
-
-    if (images.length > 0) {
-      new SliderBit(el);
-      // re-apply theme vars since _build() sets some inline vars too
-      applyTheme(el, theme);
-    }
+    new SliderBit(el);
+    // re-apply theme vars since _build() sets some inline vars too
+    applyTheme(el, theme);
   }
 
   /* ---------- Embed code generation ---------- */
@@ -1201,14 +1058,28 @@
     '.slider-bit__live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}' +
     '@media (prefers-reduced-motion: reduce){.slider-bit__track,.slider-bit__slide{transition:none !important;}}';
 
-  function buildSelfContainedEmbedCode() {
+  // Guidance shown in place of real slides -- Slider Bit doesn't host images,
+  // so the embed always needs the user to either hand-author slides with
+  // their own image URLs, or point the track at a CMS Collection List.
+  var EXAMPLE_SLIDES_BLOCK =
+    '    <!-- Replace this example with your own slides: one .slider-bit__slide per image -->\n' +
+    '    <div class="slider-bit__slide"><img src="https://YOUR-SITE.webflow.io/path/to/image-1.jpg" alt=""></div>\n' +
+    '    <div class="slider-bit__slide"><img src="https://YOUR-SITE.webflow.io/path/to/image-2.jpg" alt=""></div>\n' +
+    '    <!-- ...add as many slides as you need... -->\n\n' +
+    '    <!-- OR, for a CMS-driven slider: skip the hand-authored slides above and\n' +
+    '         instead add the "slider-bit__track" class to a Webflow Collection List\n' +
+    '         element, and "slider-bit__slide" to its Collection Item template --\n' +
+    '         Slider Bit works on whatever real DOM ends up there. -->';
+
+  function buildEmbedCode(opts) {
+    opts = opts || {};
     var config = currentConfig();
     var theme = currentTheme();
-    var uid = 'sliderbit-embed-' + Math.random().toString(36).slice(2, 8);
+    var uid = 'sliderbit-' + Math.random().toString(36).slice(2, 8);
 
-    var slidesHtml = images.map(function (img) {
-      return '    <div class="slider-bit__slide"><img src="' + img.src + '" alt="' + escapeHtml(img.alt) + '"></div>';
-    }).join('\n');
+    var configAttr = opts.configId
+      ? 'data-sliderbit-config-id="' + opts.configId + '"'
+      : 'data-sliderbit-config=\'' + JSON.stringify(config) + '\'';
 
     var themeCss =
       '#' + uid + '{' +
@@ -1217,41 +1088,33 @@
       '--sb-radius:' + theme.radius + 'px;' +
       '}';
 
-    return [
-      '<!-- Slider Bit embed (self-contained) — paste this whole block into a Webflow Embed element -->',
-      '<style>',
-      ENGINE_CSS_SOURCE,
-      themeCss,
-      '</style>',
+    var lines = [
+      '<!-- Slider Bit embed — paste into a Webflow Embed element -->',
+      '<style>' + themeCss + '</style>',
       '',
-      '<div class="slider-bit" id="' + uid + '" data-sliderbit-config=\'' + JSON.stringify(config) + '\'>',
+      '<div class="slider-bit" id="' + uid + '" ' + configAttr + '>',
       '  <div class="slider-bit__track">',
-      slidesHtml,
+      EXAMPLE_SLIDES_BLOCK,
       '  </div>',
       '</div>',
-      '',
-      '<script>',
-      ENGINE_JS_SOURCE,
-      '<' + '/script>'
-    ].join('\n');
+      ''
+    ];
+
+    if (opts.selfContained) {
+      lines.push('<style>', ENGINE_CSS_SOURCE, '</style>', '', '<script>', ENGINE_JS_SOURCE, '<' + '/script>');
+    } else {
+      lines.push(
+        '<link rel="stylesheet" href="' + API_BASE + '/sliderbit.css">',
+        '<script src="' + API_BASE + '/sliderbit.js" defer><' + '/script>'
+      );
+    }
+
+    return lines.join('\n');
   }
 
-  function buildHostedEmbedCode(id) {
-    return [
-      '<!-- Slider Bit embed (hosted) — paste this into a Webflow Embed element -->',
-      '<div class="slider-bit" data-sliderbit-id="' + id + '"></div>',
-      '<link rel="stylesheet" href="' + API_BASE + '/sliderbit.css">',
-      '<script src="' + API_BASE + '/sliderbit.js" defer><' + '/script>'
-    ].join('\n');
-  }
-
-  function publishSlider() {
-    var payload = {
-      config: currentConfig(),
-      theme: currentTheme(),
-      images: images.map(function (img) { return { src: img.src, alt: img.alt }; })
-    };
-    if (currentSliderId) payload.id = currentSliderId;
+  function saveConfig() {
+    var payload = { config: currentConfig(), theme: currentTheme() };
+    if (currentConfigId) payload.id = currentConfigId;
 
     return fetch(API_BASE + '/api/sliders', {
       method: 'POST',
@@ -1260,68 +1123,61 @@
     }).then(function (res) {
       if (!res.ok) {
         return res.json().catch(function () { return {}; }).then(function (err) {
-          throw new Error(err.error || ('Publish failed (HTTP ' + res.status + ')'));
+          throw new Error(err.error || ('Save failed (HTTP ' + res.status + ')'));
         });
       }
       return res.json();
     }).then(function (data) {
-      currentSliderId = data.id;
+      currentConfigId = data.id;
       return data.id;
     });
   }
 
   /* ---------- Modal ---------- */
+  function refreshEmbedOutput() {
+    els.embedOutput.value = buildEmbedCode({ selfContained: showingSelfContained, configId: currentConfigId });
+  }
+
   els.openEmbed.addEventListener('click', function () {
     els.modalBackdrop.classList.add('open');
     showingSelfContained = false;
-    els.toggleEmbedMode.style.display = 'inline';
     els.toggleEmbedMode.textContent = 'Use self-contained code instead';
-    els.sliderIdNote.style.display = 'none';
-    els.copyBtn.disabled = true;
-    els.embedOutput.value = '';
-
-    if (IS_FILE_PROTOCOL) {
-      els.embedStatus.textContent = 'This page is open as a local file, so it can’t reach the publish API. Showing the self-contained embed instead (bigger, but works anywhere) — open this dashboard from your deployed Netlify URL to get the tiny hosted embed.';
-      lastSelfContainedCode = buildSelfContainedEmbedCode();
-      els.embedOutput.value = lastSelfContainedCode;
-      showingSelfContained = true;
-      els.toggleEmbedMode.style.display = 'none';
-      els.copyBtn.disabled = false;
-      return;
-    }
-
-    els.embedStatus.textContent = 'Publishing your slider…';
-
-    publishSlider().then(function (id) {
-      lastHostedCode = buildHostedEmbedCode(id);
-      lastSelfContainedCode = buildSelfContainedEmbedCode();
-      els.embedOutput.value = lastHostedCode;
-      els.embedStatus.textContent = 'Published — paste this into a Webflow Embed element:';
-      els.sliderIdValue.textContent = id;
+    if (currentConfigId) {
+      els.sliderIdValue.textContent = currentConfigId;
       els.sliderIdNote.style.display = 'block';
-      els.copyBtn.disabled = false;
-    }).catch(function (err) {
-      console.warn('Publish failed:', err);
-      lastSelfContainedCode = buildSelfContainedEmbedCode();
-      els.embedOutput.value = lastSelfContainedCode;
-      showingSelfContained = true;
-      els.embedStatus.textContent = 'Could not publish (' + (err.message || 'network error') + '). Showing the self-contained embed instead.';
-      els.toggleEmbedMode.style.display = 'none';
-      els.copyBtn.disabled = false;
-    });
+    } else {
+      els.sliderIdNote.style.display = 'none';
+    }
+    refreshEmbedOutput();
   });
 
   els.toggleEmbedMode.addEventListener('click', function () {
     showingSelfContained = !showingSelfContained;
-    if (showingSelfContained) {
-      els.embedOutput.value = lastSelfContainedCode || buildSelfContainedEmbedCode();
-      els.embedStatus.textContent = 'Self-contained embed (works anywhere, no hosting needed, but bigger):';
-      els.toggleEmbedMode.textContent = 'Use hosted embed instead';
-    } else if (lastHostedCode) {
-      els.embedOutput.value = lastHostedCode;
-      els.embedStatus.textContent = 'Published — paste this into a Webflow Embed element:';
-      els.toggleEmbedMode.textContent = 'Use self-contained code instead';
+    els.toggleEmbedMode.textContent = showingSelfContained ? 'Use hosted embed instead' : 'Use self-contained code instead';
+    refreshEmbedOutput();
+  });
+
+  els.saveConfigBtn.addEventListener('click', function () {
+    if (IS_FILE_PROTOCOL) {
+      alert('This page is open as a local file, so it can’t reach the save API. Open this dashboard from your deployed Netlify URL to save configs.');
+      return;
     }
+    els.saveConfigBtn.textContent = 'Saving…';
+    els.saveConfigBtn.disabled = true;
+    saveConfig().then(function (id) {
+      els.sliderIdValue.textContent = id;
+      els.sliderIdNote.style.display = 'block';
+      refreshEmbedOutput();
+      els.saveConfigBtn.textContent = 'Saved!';
+      setTimeout(function () {
+        els.saveConfigBtn.textContent = 'Save config for reuse';
+        els.saveConfigBtn.disabled = false;
+      }, 1200);
+    }).catch(function (err) {
+      alert('Could not save config: ' + err.message);
+      els.saveConfigBtn.textContent = 'Save config for reuse';
+      els.saveConfigBtn.disabled = false;
+    });
   });
 
   els.closeModal.addEventListener('click', function () {
@@ -1350,7 +1206,7 @@
     }
   });
 
-  /* ---------- Load existing slider ---------- */
+  /* ---------- Load a saved config ---------- */
   els.loadIdBtn.addEventListener('click', function () {
     var id = els.loadIdInput.value.trim();
     if (!id) return;
@@ -1363,12 +1219,8 @@
         return res.json();
       })
       .then(function (data) {
-        currentSliderId = id;
-        images = (data.images || []).map(function (img) {
-          return { id: nextId++, src: img.src, alt: img.alt || '' };
-        });
+        currentConfigId = id;
         applyConfigToControls(data.config, data.theme);
-        renderThumbs();
         renderPreview();
         els.loadIdBtn.textContent = 'Loaded!';
         setTimeout(function () {
@@ -1377,14 +1229,13 @@
         }, 1200);
       })
       .catch(function (err) {
-        alert('Could not load slider "' + id + '": ' + err.message);
+        alert('Could not load config "' + id + '": ' + err.message);
         els.loadIdBtn.textContent = 'Load';
         els.loadIdBtn.disabled = false;
       });
   });
 
   /* ---------- Init ---------- */
-  renderThumbs();
   renderPreview();
 })();
 </script>

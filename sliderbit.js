@@ -755,16 +755,27 @@
   };
 
   // -------------------------------------------------------------------
-  // Remote hydration: a container can skip inline markup entirely and just
-  // carry a data-sliderbit-id. In that case we fetch its config + images
-  // from the Slider Bit API (hosted alongside this script, or wherever
-  // data-sliderbit-api points) and build the track/slide markup before
-  // handing off to the normal constructor. This is what keeps embed code
-  // to a couple of lines regardless of how many images a slider has:
+  // Config-only remote hydration: Slider Bit never hosts your images — you
+  // build your own slide markup (hand-authored in Webflow's Designer, or a
+  // CMS Collection List with our BEM classes added to it) using your own
+  // images. `data-sliderbit-config-id` is just an optional convenience for
+  // NOT having to paste the same options JSON on every page: it fetches a
+  // small saved { config, theme } blob from the Slider Bit API and applies
+  // it to a container that already has its own real track/slides, then
+  // instantiates normally against that existing DOM (nothing is rebuilt).
   //
-  //   <div class="slider-bit" data-sliderbit-id="abc123"></div>
+  //   <div class="slider-bit" data-sliderbit-config-id="abc123">
+  //     <div class="slider-bit__track">
+  //       <div class="slider-bit__slide"><img src="your-own-image.jpg" alt=""></div>
+  //       ...
+  //     </div>
+  //   </div>
   //   <link rel="stylesheet" href="https://your-site.netlify.app/sliderbit.css">
   //   <script src="https://your-site.netlify.app/sliderbit.js" defer></script>
+  //
+  // Most embeds don't need this at all — just put the options directly in
+  // data-sliderbit-config='{"loop":true,...}' on the container and skip the
+  // network round-trip entirely.
   // -------------------------------------------------------------------
 
   var __scriptEl = (typeof document !== 'undefined') ? document.currentScript : null;
@@ -773,29 +784,43 @@
     try { API_BASE = new URL(__scriptEl.src).origin; } catch (e) { API_BASE = ''; }
   }
 
-  function escapeAttr(str) {
-    return String(str).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
+  // Declarative sync/nav wiring, e.g.:
+  //   <div class="slider-bit" data-sliderbit-sync="#main" data-sliderbit-nav>...</div>
+  // Called once per instance as soon as it exists -- immediately for plain
+  // inline sliders, or after the fetch() resolves for config-id sliders --
+  // so it works regardless of which path (or order) built the two sliders.
+  function tryWireSync(inst, scope) {
+    var sel = inst.el.getAttribute('data-sliderbit-sync');
+    if (!sel || inst._synced) return;
+    scope = scope || document;
+    var otherEl = scope.querySelector(sel) || document.querySelector(sel);
+    var other = otherEl && otherEl.__sliderBitInstance;
+    if (other && other !== inst && !other._synced) {
+      inst._synced = true;
+      other._synced = true;
+      inst.sync(other, { nav: inst.el.hasAttribute('data-sliderbit-nav') });
+    }
   }
 
-  function hydrateRemote(el, id) {
+  function hydrateRemoteConfig(el, id, scope) {
+    var track = el.querySelector('.slider-bit__track');
+    if (!track || track.children.length === 0) {
+      console.warn('SliderBit: data-sliderbit-config-id="' + id + '" needs its own .slider-bit__track with real slide markup already in the DOM (Slider Bit does not host images) — skipping', el);
+      return;
+    }
     var apiBase = el.getAttribute('data-sliderbit-api') || API_BASE;
     if (!apiBase) {
-      console.warn('SliderBit: no API base available (script must be loaded via <script src="..."> from your hosted domain, or set data-sliderbit-api on the container) — cannot load remote slider', id);
+      console.warn('SliderBit: no API base available (script must be loaded via <script src="..."> from your hosted domain, or set data-sliderbit-api on the container) — cannot load saved config', id);
+      new SliderBit(el); // still build the slider off local markup with whatever defaults/inline config it already has
+      if (el.__sliderBitInstance) tryWireSync(el.__sliderBitInstance, scope);
       return;
     }
     return fetch(apiBase + '/api/sliders/' + encodeURIComponent(id))
       .then(function (res) {
-        if (!res.ok) throw new Error('failed to load slider "' + id + '" (HTTP ' + res.status + ')');
+        if (!res.ok) throw new Error('failed to load config "' + id + '" (HTTP ' + res.status + ')');
         return res.json();
       })
       .then(function (data) {
-        var images = data.images || [];
-        var html = images.map(function (img) {
-          return '<div class="slider-bit__slide"><img src="' + img.src + '" alt="' + escapeAttr(img.alt || '') + '"></div>';
-        }).join('');
-        el.innerHTML = '<div class="slider-bit__track">' + html + '</div>';
         el.setAttribute('data-sliderbit-config', JSON.stringify(data.config || {}));
         if (data.theme) {
           if (data.theme.arrowColor) el.style.setProperty('--sb-arrow-color', data.theme.arrowColor);
@@ -805,7 +830,11 @@
         new SliderBit(el);
       })
       .catch(function (err) {
-        console.warn('SliderBit:', err.message || err);
+        console.warn('SliderBit:', err.message || err, '— building with local/default options instead');
+        new SliderBit(el);
+      })
+      .then(function () {
+        if (el.__sliderBitInstance) tryWireSync(el.__sliderBitInstance, scope);
       });
   }
 
@@ -815,27 +844,16 @@
     var built = [];
 
     Array.prototype.forEach.call(nodes, function (el) {
-      var remoteId = el.getAttribute('data-sliderbit-id');
-      if (remoteId && !el.querySelector('.slider-bit__track')) {
-        hydrateRemote(el, remoteId);
+      var configId = el.getAttribute('data-sliderbit-config-id');
+      if (configId) {
+        hydrateRemoteConfig(el, configId, scope);
+        if (el.__sliderBitInstance) built.push(el.__sliderBitInstance);
       } else {
         built.push(new SliderBit(el));
       }
     });
 
-    // Declarative sync/nav wiring for inline (non-remote) sliders, e.g.:
-    //   <div class="slider-bit" data-sliderbit-sync="#main" data-sliderbit-nav>...</div>
-    built.forEach(function (inst) {
-      var sel = inst.el.getAttribute('data-sliderbit-sync');
-      if (!sel || inst._synced) return;
-      var otherEl = scope.querySelector(sel) || document.querySelector(sel);
-      var other = otherEl && otherEl.__sliderBitInstance;
-      if (other && other !== inst && !other._synced) {
-        inst._synced = true;
-        other._synced = true;
-        inst.sync(other, { nav: inst.el.hasAttribute('data-sliderbit-nav') });
-      }
-    });
+    built.forEach(function (inst) { tryWireSync(inst, scope); });
 
     return built;
   }

@@ -1,6 +1,10 @@
-// Slider Bit — save a slider's config + images to Netlify Blobs.
+// Slider Bit — save a reusable slider CONFIG (options + theme only) to Netlify
+// Blobs. Images are never sent here — Slider Bit doesn't host images; you use
+// your own images/markup (e.g. already uploaded to Webflow) and this just
+// lets you save/share a set of slider options under a short ID so you don't
+// have to re-paste the JSON config on every page that uses it.
 // POST /api/sliders
-// Body: { id?: string, config: object, images: [{ src, alt }] }
+// Body: { id?: string, config: object, theme?: object }
 // Response: { id: string }
 
 import { getStore } from '@netlify/blobs';
@@ -9,7 +13,7 @@ export const config = {
   path: '/api/sliders',
 };
 
-const MAX_BODY_BYTES = 8 * 1024 * 1024; // 8MB safety cap for a handful of base64 images
+const MAX_BODY_BYTES = 64 * 1024; // config+theme JSON is tiny; 64KB is generous headroom
 
 function corsHeaders() {
   return {
@@ -43,7 +47,7 @@ export default async (req) => {
 
   const contentLength = Number(req.headers.get('content-length') || 0);
   if (contentLength > MAX_BODY_BYTES) {
-    return json({ error: 'Payload too large. Try fewer or smaller images.' }, 413);
+    return json({ error: 'Payload too large for a config (images are not stored here).' }, 413);
   }
 
   let body;
@@ -53,17 +57,13 @@ export default async (req) => {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  if (!body || typeof body !== 'object' || !body.config || !Array.isArray(body.images)) {
-    return json({ error: 'Expected { config: object, images: array }' }, 400);
+  if (!body || typeof body !== 'object' || !body.config || typeof body.config !== 'object') {
+    return json({ error: 'Expected { config: object, theme?: object }' }, 400);
   }
 
   const theme = (body.theme && typeof body.theme === 'object') ? body.theme : null;
 
-  if (body.images.length === 0) {
-    return json({ error: 'Add at least one image before publishing' }, 400);
-  }
-
-  // Basic ID validation if the client wants to update an existing slider
+  // Basic ID validation if the client wants to update an existing saved config.
   let id = genId();
   if (typeof body.id === 'string' && /^[a-z0-9]{4,32}$/i.test(body.id)) {
     id = body.id;
@@ -72,7 +72,6 @@ export default async (req) => {
   const store = getStore('sliders');
   await store.setJSON(id, {
     config: body.config,
-    images: body.images,
     theme: theme,
     updatedAt: new Date().toISOString(),
   });

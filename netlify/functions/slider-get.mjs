@@ -1,6 +1,10 @@
-// Slider Bit — fetch a published slider's config + images by ID.
+// Slider Bit — fetch a saved slider CONFIG (options + theme, no images) by ID.
 // GET /api/sliders/:id
-// Response: { config: object, images: [{ src, alt }], updatedAt: string }
+// Response: { config: object, theme: object|null, updatedAt: string }
+//
+// Images are never part of this payload — Slider Bit doesn't host images.
+// This just lets an embed reference a small set of saved options by ID
+// instead of inlining the config JSON directly on every page.
 //
 // This is called cross-origin from whatever site embeds the slider (e.g. a
 // Webflow site), so it needs permissive CORS.

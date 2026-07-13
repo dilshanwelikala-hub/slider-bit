@@ -85,6 +85,7 @@
     this.isRTL = this.options.direction === 'rtl';
     this._autoplayTimer = null;
     this._dragging = false;
+    this._locked = false;
     this.cloneCount = 0;
     this.realCount = this.slides.length;
     this._changeCallbacks = [];
@@ -410,6 +411,10 @@
         }
         committed = true;
         self._dragging = true;
+        // A real drag gesture always takes priority over any pending loop
+        // snap-back -- cancel it now so the eventual release move isn't
+        // silently ignored by the _locked guard in _moveTo.
+        self._cancelSnapBack();
         track.classList.add('slider-bit__track--dragging');
       }
 
@@ -515,8 +520,20 @@
   /**
    * Internal mover: `target` is an index in "extended" (clone-inclusive) space
    * when clones exist, otherwise a plain slide index.
+   *
+   * On a looping slider, the clone buffer only extends a couple of slides past
+   * the real range (see _buildClones), so rapid repeated calls -- mashing an
+   * arrow button, holding an arrow key (which key-repeats far faster than the
+   * transition can settle), or overlapping autoplay ticks with a short custom
+   * interval -- can walk `index` past the last real clone in the DOM before the
+   * previous move has snapped back. That leaves the track transformed to a
+   * position with no matching slide: a visible glitch, not a seamless loop.
+   * `_locked` blocks new loop-moves until the in-flight one has settled, the
+   * same way most carousel libraries (e.g. Splide's `waitForTransition`) do.
    */
   SliderBit.prototype._moveTo = function (target, animate) {
+    if (animate && this.cloneCount && this._locked) return;
+
     if (!this.cloneCount) {
       if (this.options.loop) {
         var len = this.slides.length;
@@ -534,32 +551,36 @@
     if (animate && this.cloneCount) this._armSnapBack();
   };
 
+  SliderBit.prototype._cancelSnapBack = function () {
+    clearTimeout(this._snapTimer);
+    if (this._snapListener) {
+      this.track.removeEventListener('transitionend', this._snapListener);
+      this._snapListener = null;
+    }
+    this._locked = false;
+  };
+
   SliderBit.prototype._armSnapBack = function () {
     var self = this;
-    clearTimeout(this._snapTimer);
-    if (this._snapListener) this.track.removeEventListener('transitionend', this._snapListener);
+    this._cancelSnapBack();
+    this._locked = true;
 
     this._snapListener = function (e) {
       if (e.target !== self.track) return;
-      cleanup();
+      self._cancelSnapBack();
       self._snapBack();
     };
     this.track.addEventListener('transitionend', this._snapListener);
 
-    function cleanup() {
-      clearTimeout(self._snapTimer);
-      if (self._snapListener) self.track.removeEventListener('transitionend', self._snapListener);
-      self._snapListener = null;
-    }
-
     this._snapTimer = setTimeout(function () {
-      cleanup();
+      self._cancelSnapBack();
       self._snapBack();
     }, (this.options.speed || 500) + 80);
   };
 
   SliderBit.prototype._snapBack = function () {
     if (!this.cloneCount) return;
+    this._locked = false;
     var real = this._realIndex();
     var normalized = this.cloneCount + real;
     if (normalized !== this.index) {

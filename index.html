@@ -215,6 +215,32 @@
     font-weight: 600;
     letter-spacing: 0.02em;
   }
+
+  /* Presets */
+  .preset-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+  .preset-btn {
+    text-align: left;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 0.55rem 0.7rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .preset-btn:hover { border-color: var(--accent); }
+  .preset-btn.is-active { border-color: var(--accent); background: rgba(108,140,255,0.12); }
+  .preset-btn .preset-name { font-size: 0.85rem; font-weight: 600; display: block; }
+  .preset-btn .preset-hint { font-size: 0.75rem; color: var(--text-dim); display: block; margin-top: 0.1rem; }
+
+  /* Thumbnail nav preview (shown only for the Thumbnail-Nav Gallery preset) */
+  .preview-nav-wrap { width: 100%; margin-top: 0.75rem; display: none; }
+  .preview-nav-wrap.visible { display: block; }
+  #preview-nav-slider { background: #000; }
 </style>
 </head>
 <body>
@@ -231,6 +257,10 @@
 
   <!-- LEFT: Preview + saved configs -->
   <div class="panel">
+    <h2>Presets</h2>
+    <p class="empty-hint" style="margin-top:0;">One-click starting points — pick one, then fine-tune with the controls on the right.</p>
+    <div class="preset-grid" id="preset-grid"></div>
+
     <h2>Preview</h2>
     <p class="empty-hint" style="margin-top:0;">Slider Bit doesn't host your images — you use your own (already in Webflow, or a CMS Collection List). This preview uses placeholder slides just so you can see how your settings behave.</p>
     <div class="field">
@@ -254,6 +284,11 @@
     <div class="preview-stage">
       <div class="slider-bit" id="preview-slider">
         <div class="slider-bit__track"></div>
+      </div>
+      <div class="preview-nav-wrap" id="preview-nav-wrap">
+        <div class="slider-bit" id="preview-nav-slider">
+          <div class="slider-bit__track"></div>
+        </div>
       </div>
     </div>
     <div class="preview-hint">Live preview (placeholder slides) — updates as you change settings.</div>
@@ -882,6 +917,9 @@
 
   var els = {
     previewSlider: document.getElementById('preview-slider'),
+    previewNavWrap: document.getElementById('preview-nav-wrap'),
+    previewNavSlider: document.getElementById('preview-nav-slider'),
+    presetGrid: document.getElementById('preset-grid'),
     slideCount: document.getElementById('slideCount'),
     openEmbed: document.getElementById('open-embed'),
     modalBackdrop: document.getElementById('modal-backdrop'),
@@ -984,6 +1022,104 @@
     }
   }
 
+  /* ---------- Presets ---------- */
+  // One-click starting configs. `config`/`theme` map directly onto the same
+  // fields applyConfigToControls()/currentConfig() already read -- every
+  // field is specified explicitly so switching presets doesn't leave stale
+  // values from whatever was set before. `nav` (only on the thumbnail-gallery
+  // preset) tells renderPreview()/buildEmbedCode() to build a second, synced
+  // thumbnail-strip slider using the engine's existing sync()/data-sliderbit-sync
+  // feature, instead of just a single slider.
+  var PRESETS = {
+    hero: {
+      label: 'Hero / Gallery',
+      hint: 'Full-width banner, one slide at a time, autoplay.',
+      config: {
+        type: 'slide', direction: 'ltr', perPage: 1, gap: '16px', aspectRatio: '16/9',
+        focus: false, loop: true, autoplay: true, interval: 5000, pauseOnHover: true,
+        speed: 500, arrows: true, pagination: true, drag: true, wheel: false, keyboard: true
+      },
+      theme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 8 }
+    },
+    product: {
+      label: 'Product Grid Carousel',
+      hint: 'Several cards per view, arrows only, no autoplay.',
+      config: {
+        type: 'slide', direction: 'ltr', perPage: 4, gap: '16px', aspectRatio: '4/3',
+        focus: false, loop: true, autoplay: false, interval: 4000, pauseOnHover: true,
+        speed: 450, arrows: true, pagination: false, drag: true, wheel: false, keyboard: true
+      },
+      theme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 8 }
+    },
+    testimonial: {
+      label: 'Testimonial / Quote Slider',
+      hint: 'One quote at a time, slow fade, dots only.',
+      config: {
+        type: 'fade', direction: 'ltr', perPage: 1, gap: '16px', aspectRatio: '16/9',
+        focus: false, loop: true, autoplay: true, interval: 7000, pauseOnHover: true,
+        speed: 600, arrows: false, pagination: true, drag: true, wheel: false, keyboard: true
+      },
+      theme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 8 }
+    },
+    logos: {
+      label: 'Logo / Brand Strip',
+      hint: 'Many small logos, continuous autoplay, no controls.',
+      config: {
+        type: 'slide', direction: 'ltr', perPage: 6, gap: '24px', aspectRatio: '21/9',
+        focus: false, loop: true, autoplay: true, interval: 2000, pauseOnHover: false,
+        speed: 800, arrows: false, pagination: false, drag: false, wheel: false, keyboard: false
+      },
+      theme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 4 }
+    },
+    thumbnav: {
+      label: 'Thumbnail-Nav Gallery',
+      hint: 'Big image + clickable thumbnail strip underneath.',
+      config: {
+        type: 'slide', direction: 'ltr', perPage: 1, gap: '16px', aspectRatio: '16/9',
+        focus: false, loop: true, autoplay: false, interval: 4000, pauseOnHover: true,
+        speed: 500, arrows: true, pagination: false, drag: true, wheel: false, keyboard: true
+      },
+      theme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 8 },
+      nav: true,
+      // Companion thumbnail-strip config -- not user-editable via the main
+      // controls, kept intentionally simple (no arrows/dots/autoplay on a nav strip).
+      navConfig: {
+        type: 'slide', direction: 'ltr', perPage: 5, perMove: 1, gap: '8px', aspectRatio: '1/1',
+        focus: false, loop: false, autoplay: false, pauseOnHover: false,
+        speed: 300, arrows: false, pagination: false, drag: true, wheel: false, keyboard: false,
+        lazyLoad: true
+      },
+      navTheme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 6 }
+    }
+  };
+
+  var activePresetId = null;
+
+  function renderPresetButtons() {
+    els.presetGrid.innerHTML = '';
+    Object.keys(PRESETS).forEach(function (id) {
+      var preset = PRESETS[id];
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'preset-btn';
+      btn.dataset.preset = id;
+      btn.innerHTML = '<span class="preset-name">' + preset.label + '</span><span class="preset-hint">' + preset.hint + '</span>';
+      btn.addEventListener('click', function () { applyPreset(id); });
+      els.presetGrid.appendChild(btn);
+    });
+  }
+
+  function applyPreset(id) {
+    var preset = PRESETS[id];
+    if (!preset) return;
+    activePresetId = id;
+    applyConfigToControls(preset.config, preset.theme);
+    Array.prototype.forEach.call(els.presetGrid.children, function (btn) {
+      btn.classList.toggle('is-active', btn.dataset.preset === id);
+    });
+    renderPreview();
+  }
+
   ['perPage','gap','speed','interval','radius'].forEach(function (id) {
     controls[id].addEventListener('input', function () {
       document.getElementById(id + '-val').textContent = controls[id].value;
@@ -1030,9 +1166,30 @@
     delete el.__sliderBitInstance;
 
     applyTheme(el, theme);
-    new SliderBit(el);
+    var mainInst = new SliderBit(el);
     // re-apply theme vars since _build() sets some inline vars too
     applyTheme(el, theme);
+
+    var preset = activePresetId ? PRESETS[activePresetId] : null;
+    if (preset && preset.nav) {
+      var navEl = els.previewNavSlider;
+      els.previewNavWrap.classList.add('visible');
+      navEl.className = 'slider-bit';
+      navEl.removeAttribute('style');
+      navEl.innerHTML = '<div class="slider-bit__track">' + buildPlaceholderSlidesHtml(count) + '</div>';
+      navEl.setAttribute('data-sliderbit-config', JSON.stringify(preset.navConfig));
+      delete navEl.__sliderBitInstance;
+      applyTheme(navEl, preset.navTheme);
+      var navInst = new SliderBit(navEl);
+      applyTheme(navEl, preset.navTheme);
+      // sync()'s `self` (the caller) becomes the clickable/highlighted thumbnail
+      // strip, and `other` is the slider that clicking a thumbnail navigates --
+      // so the nav instance must be the caller here, not the main gallery.
+      if (mainInst && navInst) navInst.sync(mainInst, { nav: true });
+    } else {
+      els.previewNavWrap.classList.remove('visible');
+      delete els.previewNavSlider.__sliderBitInstance;
+    }
   }
 
   /* ---------- Embed code generation ---------- */
@@ -1080,6 +1237,94 @@
     '.slider-bit__live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}' +
     '@media (prefers-reduced-motion: reduce){.slider-bit__track,.slider-bit__slide{transition:none !important;}}';
 
+  // The inline engine copy above (ENGINE_JS_SOURCE) intentionally omits
+  // auto-init/remote-hydration -- the dashboard's own preview instantiates
+  // SliderBit manually. But that same copy is reused as the "self-contained"
+  // embed's <script> body, and a pasted embed needs SOMETHING to actually
+  // build a slider on the page. Without this, a self-contained embed defines
+  // window.SliderBit and then does nothing: no arrows, no dots, no behavior --
+  // it just sits there as static, unstyled markup. This appends the same
+  // auto-init/tryWireSync/remote-hydration tail that the real sliderbit.js
+  // file already has, so self-contained embeds actually initialize.
+  var ENGINE_AUTOINIT_SOURCE =
+    "(function (global) {\n" +
+    "  'use strict';\n" +
+    "  var __scriptEl = (typeof document !== 'undefined') ? document.currentScript : null;\n" +
+    "  var API_BASE = '';\n" +
+    "  if (__scriptEl && __scriptEl.src) {\n" +
+    "    try { API_BASE = new URL(__scriptEl.src).origin; } catch (e) { API_BASE = ''; }\n" +
+    "  }\n" +
+    "  function tryWireSync(inst, scope) {\n" +
+    "    var sel = inst.el.getAttribute('data-sliderbit-sync');\n" +
+    "    if (!sel || inst._synced) return;\n" +
+    "    scope = scope || document;\n" +
+    "    var otherEl = scope.querySelector(sel) || document.querySelector(sel);\n" +
+    "    var other = otherEl && otherEl.__sliderBitInstance;\n" +
+    "    if (other && other !== inst && !other._synced) {\n" +
+    "      inst._synced = true;\n" +
+    "      other._synced = true;\n" +
+    "      inst.sync(other, { nav: inst.el.hasAttribute('data-sliderbit-nav') });\n" +
+    "    }\n" +
+    "  }\n" +
+    "  function hydrateRemoteConfig(el, id, scope) {\n" +
+    "    var track = el.querySelector('.slider-bit__track');\n" +
+    "    if (!track || track.children.length === 0) {\n" +
+    "      console.warn('SliderBit: data-sliderbit-config-id needs its own .slider-bit__track with real slide markup already in the DOM -- skipping', el);\n" +
+    "      return;\n" +
+    "    }\n" +
+    "    var apiBase = el.getAttribute('data-sliderbit-api') || API_BASE;\n" +
+    "    if (!apiBase) {\n" +
+    "      console.warn('SliderBit: no API base available (a self-contained/inline embed has no script src to infer one from -- set data-sliderbit-api on the container) -- cannot load saved config', id);\n" +
+    "      new global.SliderBit(el);\n" +
+    "      if (el.__sliderBitInstance) tryWireSync(el.__sliderBitInstance, scope);\n" +
+    "      return;\n" +
+    "    }\n" +
+    "    return fetch(apiBase + '/api/sliders/' + encodeURIComponent(id))\n" +
+    "      .then(function (res) {\n" +
+    "        if (!res.ok) throw new Error('failed to load config \"' + id + '\" (HTTP ' + res.status + ')');\n" +
+    "        return res.json();\n" +
+    "      })\n" +
+    "      .then(function (data) {\n" +
+    "        el.setAttribute('data-sliderbit-config', JSON.stringify(data.config || {}));\n" +
+    "        if (data.theme) {\n" +
+    "          if (data.theme.arrowColor) el.style.setProperty('--sb-arrow-color', data.theme.arrowColor);\n" +
+    "          if (data.theme.dotColorActive) el.style.setProperty('--sb-dot-color-active', data.theme.dotColorActive);\n" +
+    "          if (data.theme.radius != null) el.style.setProperty('--sb-radius', data.theme.radius + 'px');\n" +
+    "        }\n" +
+    "        new global.SliderBit(el);\n" +
+    "      })\n" +
+    "      .catch(function (err) {\n" +
+    "        console.warn('SliderBit:', err.message || err, '- building with local/default options instead');\n" +
+    "        new global.SliderBit(el);\n" +
+    "      })\n" +
+    "      .then(function () {\n" +
+    "        if (el.__sliderBitInstance) tryWireSync(el.__sliderBitInstance, scope);\n" +
+    "      });\n" +
+    "  }\n" +
+    "  function initAll(root) {\n" +
+    "    var scope = root || document;\n" +
+    "    var nodes = scope.querySelectorAll('.slider-bit');\n" +
+    "    var built = [];\n" +
+    "    Array.prototype.forEach.call(nodes, function (el) {\n" +
+    "      var configId = el.getAttribute('data-sliderbit-config-id');\n" +
+    "      if (configId) {\n" +
+    "        hydrateRemoteConfig(el, configId, scope);\n" +
+    "        if (el.__sliderBitInstance) built.push(el.__sliderBitInstance);\n" +
+    "      } else {\n" +
+    "        built.push(new global.SliderBit(el));\n" +
+    "      }\n" +
+    "    });\n" +
+    "    built.forEach(function (inst) { tryWireSync(inst, scope); });\n" +
+    "    return built;\n" +
+    "  }\n" +
+    "  if (document.readyState === 'loading') {\n" +
+    "    document.addEventListener('DOMContentLoaded', function () { initAll(); });\n" +
+    "  } else {\n" +
+    "    initAll();\n" +
+    "  }\n" +
+    "  global.SliderBit.initAll = initAll;\n" +
+    "})(window);";
+
   // Guidance shown in place of real slides -- Slider Bit doesn't host images,
   // so the embed always needs the user to either hand-author slides with
   // their own image URLs, or point the track at a CMS Collection List.
@@ -1092,6 +1337,14 @@
     '         instead add the "slider-bit__track" class to a Webflow Collection List\n' +
     '         element, and "slider-bit__slide" to its Collection Item template --\n' +
     '         Slider Bit works on whatever real DOM ends up there. -->';
+
+  var NAV_SLIDES_BLOCK =
+    '    <!-- Same slide count as the main gallery above, in the same order --\n' +
+    '         these become the clickable thumbnails, so smaller/cropped\n' +
+    '         versions of the same images work well here. -->\n' +
+    '    <div class="slider-bit__slide"><img src="https://YOUR-SITE.webflow.io/path/to/image-1.jpg" alt=""></div>\n' +
+    '    <div class="slider-bit__slide"><img src="https://YOUR-SITE.webflow.io/path/to/image-2.jpg" alt=""></div>\n' +
+    '    <!-- ...one thumbnail per main slide... -->';
 
   function buildEmbedCode(opts) {
     opts = opts || {};
@@ -1110,6 +1363,10 @@
       '--sb-radius:' + theme.radius + 'px;' +
       '}';
 
+    var preset = activePresetId ? PRESETS[activePresetId] : null;
+    var needsNav = !!(preset && preset.nav);
+    var navUid = uid + '-thumbs';
+
     var lines = [
       '<!-- Slider Bit embed — paste into a Webflow Embed element -->',
       '<style>' + themeCss + '</style>',
@@ -1118,12 +1375,36 @@
       '  <div class="slider-bit__track">',
       EXAMPLE_SLIDES_BLOCK,
       '  </div>',
-      '</div>',
-      ''
+      '</div>'
     ];
 
+    if (needsNav) {
+      // The thumbnail strip's config is always inlined (not saved-by-ID),
+      // since the config-only backend stores a single {config,theme} pair --
+      // saving currently applies only to the main gallery above.
+      var navThemeCss =
+        '#' + navUid + '{' +
+        '--sb-arrow-color:' + preset.navTheme.arrowColor + ';' +
+        '--sb-dot-color-active:' + preset.navTheme.dotColorActive + ';' +
+        '--sb-radius:' + preset.navTheme.radius + 'px;' +
+        '}';
+      lines[1] = '<style>' + themeCss + navThemeCss + '</style>';
+      lines.push(
+        '',
+        '<!-- Thumbnail strip: synced to the gallery above via data-sliderbit-sync -->',
+        '<div class="slider-bit" id="' + navUid + '" data-sliderbit-sync="#' + uid + '" data-sliderbit-nav ' +
+          'data-sliderbit-config=\'' + JSON.stringify(preset.navConfig) + '\'>',
+        '  <div class="slider-bit__track">',
+        NAV_SLIDES_BLOCK,
+        '  </div>',
+        '</div>'
+      );
+    }
+
+    lines.push('');
+
     if (opts.selfContained) {
-      lines.push('<style>', ENGINE_CSS_SOURCE, '</style>', '', '<script>', ENGINE_JS_SOURCE, '<' + '/script>');
+      lines.push('<style>', ENGINE_CSS_SOURCE, '</style>', '', '<script>', ENGINE_JS_SOURCE, ENGINE_AUTOINIT_SOURCE, '<' + '/script>');
     } else {
       lines.push(
         '<link rel="stylesheet" href="' + API_BASE + '/sliderbit.css">',
@@ -1258,6 +1539,7 @@
   });
 
   /* ---------- Init ---------- */
+  renderPresetButtons();
   renderPreview();
 })();
 </script>

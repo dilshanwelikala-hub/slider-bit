@@ -75,6 +75,40 @@
     padding: 0.1rem;
   }
 
+  /* Below ~1100px the 3-column grid (320px/1fr/340px) gets too cramped for
+     the config panels -- stack everything into a single column instead, and
+     let the page scroll normally rather than each panel independently
+     scrolling in a fixed-height column (which only makes sense side-by-side). */
+  @media (max-width: 1100px) {
+    .layout {
+      grid-template-columns: 1fr;
+      min-height: 0;
+    }
+    .panel {
+      max-height: none;
+      overflow-y: visible;
+    }
+    .preview-wrap { order: -1; } /* keep the live preview near the top on mobile */
+  }
+
+  /* Small phones: tighten outer spacing and let the header wrap instead of
+     squeezing the title/subtitle/button onto one cramped row. */
+  @media (max-width: 640px) {
+    body { padding: 0.5rem; }
+    .app-shell { border-radius: 18px; }
+    header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.6rem;
+      padding: 1.1rem 1.1rem 0.9rem;
+    }
+    header .brand { flex-wrap: wrap; }
+    #open-embed { width: 100% !important; }
+    .layout { padding: 0 0.7rem 0.7rem; gap: 0.8rem; }
+    .modal { width: 100%; max-height: 100vh; border-radius: 0; }
+    .modal-backdrop { padding: 0; }
+  }
+
   /* Each logical section (Presets, Preview, Saved configs, Layout, Behavior,
      Style) sits in its own rounded white card, like the reference dashboard's
      "Suggested courses" / "Previous lessons" cards. */
@@ -404,6 +438,19 @@
       </select>
     </div>
     <div class="row-check"><label for="focusCenter">Center focus</label><input type="checkbox" id="focusCenter"></div>
+    <div class="field">
+      <label>Peek next/prev slide (px) <span id="peek-val">0</span></label>
+      <input type="range" id="peek" min="0" max="120" step="4" value="0">
+    </div>
+    <div class="field">
+      <label>Outer padding (px) <span id="padding-val">0</span></label>
+      <input type="range" id="padding" min="0" max="64" step="2" value="0">
+    </div>
+    <div class="row-check"><label for="mobileOverride">Different layout on mobile</label><input type="checkbox" id="mobileOverride"></div>
+    <div class="field sub-field" id="mobile-perPage-field" style="display:none;">
+      <label>Slides per view on mobile (&le;768px) <span id="mobilePerPage-val">1</span></label>
+      <input type="range" id="mobilePerPage" min="1" max="4" step="1" value="1">
+    </div>
     </div>
 
     <div class="dash-card">
@@ -518,6 +565,7 @@
     this._autoplayTimer = null;
     this._dragging = false;
     this._locked = false;
+    this._pendingMove = null;
     this.cloneCount = 0;
     this.realCount = this.slides.length;
     this._changeCallbacks = [];
@@ -820,7 +868,10 @@
   // `_locked` blocks new loop-moves until the in-flight one has settled, the
   // same way most carousel libraries (e.g. Splide's `waitForTransition`) do.
   SliderBit.prototype._moveTo = function (target, animate) {
-    if (animate && this.cloneCount && this._locked) return;
+    if (animate && this.cloneCount && this._locked) {
+      this._pendingMove = target;
+      return;
+    }
     if (!this.cloneCount) {
       if (this.options.loop) {
         var len = this.slides.length;
@@ -835,7 +886,7 @@
     this._fireChange();
     if (animate && this.cloneCount) this._armSnapBack();
   };
-  SliderBit.prototype._cancelSnapBack = function () {
+  SliderBit.prototype._clearSnapTimer = function () {
     clearTimeout(this._snapTimer);
     if (this._snapListener) {
       this.track.removeEventListener('transitionend', this._snapListener);
@@ -843,18 +894,22 @@
     }
     this._locked = false;
   };
+  SliderBit.prototype._cancelSnapBack = function () {
+    this._clearSnapTimer();
+    this._pendingMove = null;
+  };
   SliderBit.prototype._armSnapBack = function () {
     var self = this;
-    this._cancelSnapBack();
+    this._clearSnapTimer();
     this._locked = true;
     this._snapListener = function (e) {
       if (e.target !== self.track) return;
-      self._cancelSnapBack();
+      self._clearSnapTimer();
       self._snapBack();
     };
     this.track.addEventListener('transitionend', this._snapListener);
     this._snapTimer = setTimeout(function () {
-      self._cancelSnapBack();
+      self._clearSnapTimer();
       self._snapBack();
     }, (this.options.speed || 500) + 80);
   };
@@ -864,6 +919,11 @@
     var real = this._realIndex();
     var normalized = this.cloneCount + real;
     if (normalized !== this.index) { this.index = normalized; this._render(false); }
+    if (this._pendingMove != null) {
+      var pending = this._pendingMove;
+      this._pendingMove = null;
+      this._moveTo(pending, true);
+    }
   };
   SliderBit.prototype._realIndex = function () {
     if (!this.cloneCount) return this.index;
@@ -1022,7 +1082,8 @@
     loadIdBtn: document.getElementById('load-id-btn')
   };
 
-  var controlIds = ['perPage','gap','aspectRatio','direction','focusCenter','type','speed','loop','autoplay',
+  var controlIds = ['perPage','gap','aspectRatio','direction','focusCenter','peek','padding','mobileOverride','mobilePerPage',
+    'type','speed','loop','autoplay',
     'interval','pauseOnHover','drag','wheel','keyboard','arrows','pagination','arrowColor','dotColorActive','radius'];
   var controls = {};
   controlIds.forEach(function (id) { controls[id] = document.getElementById(id); });
@@ -1030,6 +1091,10 @@
   els.slideCount.addEventListener('input', function () {
     document.getElementById('slideCount-val').textContent = els.slideCount.value;
     renderPreview();
+  });
+
+  controls.mobileOverride.addEventListener('change', function () {
+    document.getElementById('mobile-perPage-field').style.display = controls.mobileOverride.checked ? 'block' : 'none';
   });
 
   /* ---------- Config ---------- */
@@ -1042,6 +1107,8 @@
       gap: Number(controls.gap.value) + 'px',
       aspectRatio: controls.aspectRatio.value,
       focus: controls.focusCenter.checked ? 'center' : false,
+      peek: Number(controls.peek.value),
+      padding: Number(controls.padding.value) + 'px',
       loop: controls.loop.checked,
       autoplay: controls.autoplay.checked,
       interval: Number(controls.interval.value),
@@ -1052,7 +1119,13 @@
       drag: controls.drag.checked,
       wheel: controls.wheel.checked,
       keyboard: controls.keyboard.checked,
-      lazyLoad: true
+      lazyLoad: true,
+      // Simple mobile override: at <=768px, drop to the chosen slides-per-view.
+      // The engine's own breakpoints support (see _applyResponsive) merges
+      // these on top of the base config once the viewport crosses the width.
+      breakpoints: controls.mobileOverride.checked
+        ? { 768: { perPage: Number(controls.mobilePerPage.value) } }
+        : {}
     };
   }
 
@@ -1082,6 +1155,32 @@
     }
     if (config.aspectRatio) controls.aspectRatio.value = config.aspectRatio;
     controls.focusCenter.checked = config.focus === 'center';
+    // peek/padding/mobile breakpoint always reset (defaulting to off) rather
+    // than being guarded by a presence check, so switching between presets
+    // -- most of which don't set these -- doesn't leave a stale value behind
+    // from whatever was configured before.
+    var peekVal = 0;
+    if (config.peek != null) peekVal = typeof config.peek === 'object' ? (config.peek.start || 0) : config.peek;
+    controls.peek.value = peekVal;
+    document.getElementById('peek-val').textContent = peekVal;
+
+    var padVal = 0;
+    if (config.padding != null) {
+      var parsedPad = parseInt(config.padding, 10);
+      if (!isNaN(parsedPad)) padVal = parsedPad;
+    }
+    controls.padding.value = padVal;
+    document.getElementById('padding-val').textContent = padVal;
+    var mobileBp = config.breakpoints && config.breakpoints[768];
+    controls.mobileOverride.checked = !!mobileBp;
+    document.getElementById('mobile-perPage-field').style.display = mobileBp ? 'block' : 'none';
+    if (mobileBp && mobileBp.perPage != null) {
+      controls.mobilePerPage.value = mobileBp.perPage;
+      document.getElementById('mobilePerPage-val').textContent = mobileBp.perPage;
+    } else {
+      controls.mobilePerPage.value = 1;
+      document.getElementById('mobilePerPage-val').textContent = 1;
+    }
     if (typeof config.loop === 'boolean') controls.loop.checked = config.loop;
     if (typeof config.autoplay === 'boolean') {
       controls.autoplay.checked = config.autoplay;
@@ -1207,7 +1306,7 @@
     renderPreview();
   }
 
-  ['perPage','gap','speed','interval','radius'].forEach(function (id) {
+  ['perPage','gap','speed','interval','radius','peek','padding','mobilePerPage'].forEach(function (id) {
     controls[id].addEventListener('input', function () {
       document.getElementById(id + '-val').textContent = controls[id].value;
       renderPreview();

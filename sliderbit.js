@@ -86,6 +86,7 @@
     this._autoplayTimer = null;
     this._dragging = false;
     this._locked = false;
+    this._pendingMove = null;
     this.cloneCount = 0;
     this.realCount = this.slides.length;
     this._changeCallbacks = [];
@@ -530,9 +531,18 @@
    * position with no matching slide: a visible glitch, not a seamless loop.
    * `_locked` blocks new loop-moves until the in-flight one has settled, the
    * same way most carousel libraries (e.g. Splide's `waitForTransition`) do.
+   *
+   * Rather than silently dropping a move that arrives mid-lock, we remember
+   * only the most recent requested target as `_pendingMove` and replay it the
+   * instant the snap-back settles (see _snapBack). That way a held arrow key
+   * (or overlapping autoplay ticks) keeps advancing one safe step per
+   * settle cycle instead of appearing to stall until the key is released.
    */
   SliderBit.prototype._moveTo = function (target, animate) {
-    if (animate && this.cloneCount && this._locked) return;
+    if (animate && this.cloneCount && this._locked) {
+      this._pendingMove = target;
+      return;
+    }
 
     if (!this.cloneCount) {
       if (this.options.loop) {
@@ -551,7 +561,15 @@
     if (animate && this.cloneCount) this._armSnapBack();
   };
 
-  SliderBit.prototype._cancelSnapBack = function () {
+  // Internal-only: clears the pending timer/listener and unlocks, but leaves
+  // _pendingMove untouched. Used by _armSnapBack (re-arming for the next
+  // cycle) and by the settle callbacks in _armSnapBack below -- those must
+  // NOT wipe out a just-queued move before _snapBack gets a chance to read
+  // and replay it (that was a real bug: calling the old _cancelSnapBack from
+  // the settle path nulled _pendingMove one line before _snapBack read it,
+  // silently dropping every queued move and defeating the whole point of
+  // queuing in the first place).
+  SliderBit.prototype._clearSnapTimer = function () {
     clearTimeout(this._snapTimer);
     if (this._snapListener) {
       this.track.removeEventListener('transitionend', this._snapListener);
@@ -560,20 +578,29 @@
     this._locked = false;
   };
 
+  // Public-ish: fully cancels an in-flight loop snap-back AND discards any
+  // queued programmatic step. This is the drag gesture's entry point -- a
+  // drag always overrides a queued move (see pointerMove above), so it's the
+  // only caller that should also null out _pendingMove.
+  SliderBit.prototype._cancelSnapBack = function () {
+    this._clearSnapTimer();
+    this._pendingMove = null;
+  };
+
   SliderBit.prototype._armSnapBack = function () {
     var self = this;
-    this._cancelSnapBack();
+    this._clearSnapTimer();
     this._locked = true;
 
     this._snapListener = function (e) {
       if (e.target !== self.track) return;
-      self._cancelSnapBack();
+      self._clearSnapTimer();
       self._snapBack();
     };
     this.track.addEventListener('transitionend', this._snapListener);
 
     this._snapTimer = setTimeout(function () {
-      self._cancelSnapBack();
+      self._clearSnapTimer();
       self._snapBack();
     }, (this.options.speed || 500) + 80);
   };
@@ -586,6 +613,14 @@
     if (normalized !== this.index) {
       this.index = normalized;
       this._render(false);
+    }
+    // Replay whatever move (if any) arrived while we were locked, now that
+    // it's safe -- this is what lets a held arrow key keep advancing instead
+    // of going silent until the key is released and pressed again.
+    if (this._pendingMove != null) {
+      var pending = this._pendingMove;
+      this._pendingMove = null;
+      this._moveTo(pending, true);
     }
   };
 

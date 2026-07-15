@@ -25,14 +25,17 @@ The dashboard is now a linear 4-step wizard (a stepper at the top shows progress
 
 Each of the 4 types carries an optional `extraCss(uid)` (the dim-neighbors / 3D-tilt / caption-overlay rules, scoped to that instance's id) that gets inlined into the exported embed's `<style>` block automatically, so what was previewed is what ships — on top of the normal per-instance `--sb-*` theme variables.
 
-### Backend (Netlify Functions + Netlify Blobs) — config only, no images
+### Hosting
+Deployed on **Vercel** (GitHub-linked, auto-deploys on push), not Netlify. Originally hosted on Netlify; migrated after Netlify's free-tier credit system started blocking production deploys with a "run out of credits" banner even when the account's own usage page showed credits available (a widely-reported bug on Netlify's free plan, not an actual limit hit) — rather than wait on that, hosting moved to Vercel. `netlify.toml` and `netlify/functions/*.mjs` are left in the repo as legacy/unused — harmless, but no longer part of the deploy path — since Vercel only looks at `api/` for functions and serves everything else in the repo root as static files (no build step needed; Framework Preset should be set to "Other" with an empty Build Command).
+
+### Backend (Vercel Functions + Vercel Blob) — config only, no images
 This is an optional convenience, not a requirement: most embeds never call it at all, since the config JSON is small enough to inline directly. It exists purely so the same settings can be reused across pages/sites without re-pasting JSON each time.
 
-- `netlify/functions/slider-save.mjs` — `POST /api/sliders` — saves `{ config, theme }` (no images, ever), returns `{ id }`. Reusing an `id` in the payload updates that saved config in place. Payload cap is tiny (64KB) since there's no image data to allow for.
-- `netlify/functions/slider-get.mjs` — `GET /api/sliders/:id` — returns the saved `{ config, theme, updatedAt }`, with permissive CORS since this gets called from whatever third-party site (e.g. a Webflow site) embeds the slider.
-- `netlify.toml` — tells Netlify to publish the site root with functions in `netlify/functions`. Both functions declare their own path routing (`/api/sliders`, `/api/sliders/:id`) via Netlify Functions v2, so no redirect rules are needed.
-- `package.json` — declares `@netlify/blobs` as a dependency so Netlify installs it for the functions bundler.
-- Storage: a single site-wide Netlify Blobs store named `sliders`, keyed by config ID. No database to manage.
+- `api/sliders/index.js` — `POST /api/sliders` — saves `{ config, theme }` (no images, ever) as a JSON blob at `sliders/{id}.json`, returns `{ id }`. Reusing an `id` in the payload overwrites that saved config in place (`allowOverwrite: true`). Payload cap is tiny (64KB) since there's no image data to allow for.
+- `api/sliders/[id].js` — `GET /api/sliders/:id` — looks up `sliders/{id}.json` via `list({prefix})`, fetches it, and returns `{ config, theme, updatedAt }`, with permissive CORS since this gets called from whatever third-party site (e.g. a Webflow site) embeds the slider.
+- `package.json` — declares `@vercel/blob` as a dependency (plus `"type": "module"` and `"engines": {"node": "20.x"}` so Vercel's Node runtime matches what `@vercel/blob` requires). `@netlify/blobs` is left in as an unused legacy dependency.
+- Storage: a single Vercel Blob store (public access), keyed by `sliders/{id}.json`. No database to manage. **Requires a one-time manual step in the Vercel dashboard**: create a Blob store under the project's Storage tab and connect it — this auto-injects the `BLOB_READ_WRITE_TOKEN` env var the functions need. Without that connection, `/api/sliders` calls will fail.
+- Note: saved configs from the old Netlify Blobs store do **not** carry over — this is a different storage backend. Not a concern for anyone who never used "Save config for reuse," since every embed still works by inlining the config JSON directly.
 
 ### The embed
 Default (recommended) embed — everything needed, no network call required to generate or use it:
@@ -65,12 +68,12 @@ git add -A
 git commit -m "..."
 git push
 ```
-Netlify picks up the push, installs `@netlify/blobs` (because of `package.json`), bundles the two functions, and redeploys the static site automatically.
+Vercel (GitHub-linked) picks up the push, installs `@vercel/blob` (because of `package.json`), and redeploys the static site + `api/` functions automatically. One-time setup per Vercel project: Storage tab → create a Blob store → connect it to this project (this is what injects `BLOB_READ_WRITE_TOKEN`); without it, `/api/sliders` calls will fail even though the static dashboard still works fine.
 
 **Good to verify after deploying:**
-- Open the deployed `index.html`, adjust some settings, click "Get Embed Code" — the snippet should appear instantly (no publish/loading step) since it's just inlined JSON.
+- Open the deployed `index.html`, go through the wizard, and check the Export stage — the embed snippet should appear instantly (no publish/loading step) since it's just inlined JSON.
 - Click "Save config for reuse" — should return a short ID and swap the snippet to the `data-sliderbit-config-id` variant.
-- `GET https://YOUR-SITE.netlify.app/api/sliders/<that-id>` in a browser should return JSON with `{config, theme, updatedAt}` and no images field.
+- `GET https://YOUR-SITE.vercel.app/api/sliders/<that-id>` in a browser should return JSON with `{config, theme, updatedAt}` and no images field.
 - Paste an embed (with real Webflow image URLs in place of the example slide) into an actual Webflow Embed element on a test page and confirm it renders and pages through correctly.
 
 ## Remaining nice-to-haves

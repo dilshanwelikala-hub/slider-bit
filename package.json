@@ -2,8 +2,13 @@
   "name": "slider-bit",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
+  "engines": {
+    "node": "20.x"
+  },
   "description": "Slider Bit — configurable slider/carousel behavior engine for Webflow (and any site); bring your own images.",
   "dependencies": {
+    "@vercel/blob": "^2.3.3",
     "@netlify/blobs": "^10.7.9"
   }
 }

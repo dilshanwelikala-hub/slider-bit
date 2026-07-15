@@ -64,6 +64,11 @@
   margin-right: var(--sb-gap);
   overflow: hidden;
   border-radius: var(--sb-radius);
+  /* Lets opt-in styling on .slider-bit__slide--current/--prev/--next
+     (e.g. dimming/scaling/tilting neighbors for a center-focus or
+     coverflow look) animate smoothly. No default rule targets these
+     classes, so plain sliders render exactly as before. */
+  transition: transform var(--sb-speed) var(--sb-easing), opacity var(--sb-speed) var(--sb-easing);
 }
 
 .slider-bit__slide:last-child {

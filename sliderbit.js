@@ -143,6 +143,21 @@
     this.liveRegion.setAttribute('aria-atomic', 'true');
     el.appendChild(this.liveRegion);
 
+    // Optional "1 — 6"-style progress counter: purely opt-in -- if the
+    // author's own markup includes an element with this attribute anywhere
+    // inside the slider, we keep its text in sync with the current real
+    // slide on every change. No such element, no effect at all.
+    this.counterEl = el.querySelector('[data-sliderbit-counter]');
+    if (this.counterEl) {
+      var self_counter = this;
+      var updateCounter = function (realIndex) {
+        var total = self_counter.cloneCount ? self_counter.realCount : self_counter.slides.length;
+        self_counter.counterEl.textContent = pad2(realIndex + 1) + ' — ' + pad2(total);
+      };
+      this._onChange(updateCounter);
+      updateCounter(this._realIndex());
+    }
+
     // Arrows
     if (this.options.arrows && this.slides.length > 1) {
       this.prevBtn = this._createArrow('prev', '‹');
@@ -302,6 +317,10 @@
     apply();
     global.addEventListener('resize', debounce(apply, 150));
   };
+
+  function pad2(n) {
+    return n < 10 ? '0' + n : '' + n;
+  }
 
   function debounce(fn, wait) {
     var t;
@@ -702,6 +721,17 @@
 
     if (this.prevBtn) this.prevBtn.disabled = !this.options.loop && this.index <= 0;
     if (this.nextBtn) this.nextBtn.disabled = !this.options.loop && this.index >= this.slides.length - per;
+
+    // Purely additive, opt-in styling hooks: mark the primary-focus slide
+    // and its immediate DOM neighbors so authors (or Slider Bit's own preset
+    // CSS) can build "dim the neighbors" / coverflow-style 3D-tilt looks
+    // without any engine changes beyond these three class names. No default
+    // CSS targets them, so plain sliders are visually unaffected.
+    this.slides.forEach(function (slide, i) {
+      slide.classList.toggle('slider-bit__slide--current', i === this.index);
+      slide.classList.toggle('slider-bit__slide--prev', i === this.index - 1);
+      slide.classList.toggle('slider-bit__slide--next', i === this.index + 1);
+    }, this);
 
     this._updateA11y();
   };

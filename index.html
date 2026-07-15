@@ -6,7 +6,6 @@
 <title>Slider Bit — Webflow Embed Generator</title>
 <style>
   :root {
-    /* Warm, modern "sunlit dashboard" palette */
     --page-a: #efe3d3;
     --page-b: #e7d6c4;
     --shell: #f6efe4;
@@ -15,9 +14,9 @@
     --border: rgba(59, 47, 33, 0.09);
     --text: #2b2420;
     --text-dim: #948a7c;
-    --accent: #241f1a;       /* near-black, primary buttons (like "Join now") */
+    --accent: #241f1a;
     --accent-contrast: #ffffff;
-    --warm: #d9925f;         /* terracotta accent */
+    --warm: #d9925f;
     --warm-soft: #f4dfc9;
     --danger: #c96a4f;
     --radius-lg: 22px;
@@ -37,15 +36,14 @@
     min-height: 100vh;
   }
 
-  /* The whole app floats as one big rounded card on the warm backdrop,
-     matching the reference dashboard's "device frame" look. */
   .app-shell {
     background: var(--shell);
     border-radius: 28px;
     box-shadow: var(--shadow-pop);
     overflow: hidden;
-    max-width: 1600px;
+    max-width: 1200px;
     margin: 0 auto;
+    padding-bottom: 1rem;
   }
 
   header {
@@ -58,68 +56,64 @@
   header h1 { font-size: 1.2rem; margin: 0; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
   header h1 span { color: var(--warm); }
   header p { margin: 0.15rem 0 0; color: var(--text-dim); font-size: 0.82rem; }
-  .layout {
-    display: grid;
-    grid-template-columns: 320px 1fr 340px;
-    gap: 1.1rem;
-    padding: 0 1.1rem 1.1rem;
-    min-height: calc(100vh - 100px);
-    overflow-x: hidden;
+  #start-over-link {
+    background: none; border: none; color: var(--text-dim); font-size: 0.8rem;
+    cursor: pointer; text-decoration: underline; font-family: inherit;
   }
-  .panel {
+
+  /* ---------- Stepper ---------- */
+  .stepper {
     display: flex;
-    flex-direction: column;
-    gap: 1.1rem;
-    overflow-y: auto;
-    max-height: calc(100vh - 100px);
-    padding: 0.1rem;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0 1.75rem;
+    margin: 0 0 1.5rem;
   }
-
-  /* Below ~1100px the 3-column grid (320px/1fr/340px) gets too cramped for
-     the config panels -- stack everything into a single column instead, and
-     let the page scroll normally rather than each panel independently
-     scrolling in a fixed-height column (which only makes sense side-by-side). */
-  @media (max-width: 1100px) {
-    .layout {
-      grid-template-columns: 1fr;
-      min-height: 0;
-    }
-    .panel {
-      max-height: none;
-      overflow-y: visible;
-    }
-    .preview-wrap { order: -1; } /* keep the live preview near the top on mobile */
+  .stepper li { flex: 1; }
+  .stepper button {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 0.65rem 0.6rem;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--text-dim);
+    cursor: pointer;
+    text-align: center;
+    font-family: inherit;
+    transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
   }
-
-  /* Small phones: tighten outer spacing and let the header wrap instead of
-     squeezing the title/subtitle/button onto one cramped row. */
-  @media (max-width: 640px) {
-    body { padding: 0.5rem; }
-    .app-shell { border-radius: 18px; }
-    header {
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0.6rem;
-      padding: 1.1rem 1.1rem 0.9rem;
-    }
-    header .brand { flex-wrap: wrap; }
-    #open-embed { width: 100% !important; }
-    .layout { padding: 0 0.7rem 0.7rem; gap: 0.8rem; }
-    .modal { width: 100%; max-height: 100vh; border-radius: 0; }
-    .modal-backdrop { padding: 0; }
+  .stepper button .step-num {
+    display: inline-block;
+    width: 1.1rem; height: 1.1rem;
+    border-radius: 50%;
+    background: var(--surface-soft);
+    color: var(--text-dim);
+    font-size: 0.68rem;
+    line-height: 1.1rem;
+    margin-right: 0.35rem;
   }
+  .stepper button.is-active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+  .stepper button.is-active .step-num { background: rgba(255,255,255,0.2); color: #fff; }
+  .stepper button.is-done { color: var(--text); border-color: var(--warm); }
+  .stepper button.is-done .step-num { background: var(--warm-soft); color: var(--warm); }
+  .stepper button:disabled { cursor: not-allowed; opacity: 0.55; }
 
-  /* Each logical section (Presets, Preview, Saved configs, Layout, Behavior,
-     Style) sits in its own rounded white card, like the reference dashboard's
-     "Suggested courses" / "Previous lessons" cards. */
+  /* ---------- Stages ---------- */
+  .stage { display: none; max-width: 900px; margin: 0 auto; padding: 0 1.75rem 1rem; }
+  .stage.is-active { display: block; }
+  .stage-title { font-size: 1.15rem; font-weight: 700; margin: 0 0 0.3rem; }
+  .stage-sub { color: var(--text-dim); font-size: 0.86rem; margin: 0 0 1.5rem; line-height: 1.5; }
+
   .dash-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-card);
     padding: 1.25rem 1.35rem;
+    margin-bottom: 1.1rem;
   }
-
   h2 {
     font-size: 0.72rem;
     text-transform: uppercase;
@@ -128,223 +122,131 @@
     color: var(--text-dim);
     margin: 0 0 0.7rem;
   }
-
-  .empty-hint { color: var(--text-dim); font-size: 0.8rem; margin-top: 0.5rem; line-height: 1.5; }
-
-  /* Preview */
-  .preview-wrap {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 1.5rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-card);
-    min-width: 0;   /* grid items default to min-width:auto, which lets oversized content
-                       (e.g. a wide aspect-ratio slide) force this column wider than its
-                       track and overflow the page */
-    overflow: hidden;
-  }
-  .preview-stage {
-    width: 100%;
-    max-width: 640px;
-    min-width: 0;
-  }
-  .preview-hint {
-    color: var(--text-dim);
-    font-size: 0.8rem;
-    text-align: center;
-    margin-top: 1rem;
-  }
-
-  /* Controls */
-  .field {
-    margin-bottom: 0.75rem;
-  }
+  .field { margin-bottom: 0.75rem; }
   .field label {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 0.8rem;
-    color: var(--text-dim);
-    margin-bottom: 0.35rem;
-    font-weight: 500;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 0.8rem; color: var(--text-dim); margin-bottom: 0.35rem; font-weight: 500;
   }
-  .field input[type=number],
-  .field input[type=text],
-  .field select {
-    width: 100%;
-    background: var(--surface-soft);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 0.5rem 0.6rem;
-    border-radius: var(--radius-sm);
-    font-size: 0.85rem;
-    font-family: inherit;
+  .field input[type=number], .field input[type=text], .field select {
+    width: 100%; background: var(--surface-soft); border: 1px solid var(--border); color: var(--text);
+    padding: 0.5rem 0.6rem; border-radius: var(--radius-sm); font-size: 0.85rem; font-family: inherit;
   }
-  .field input[type=range] {
-    width: 100%;
-    accent-color: var(--warm);
-  }
+  .field input[type=range] { width: 100%; accent-color: var(--warm); }
   .field input[type=color] {
-    width: 100%;
-    height: 34px;
-    background: var(--surface-soft);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 3px;
+    width: 100%; height: 34px; background: var(--surface-soft); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 3px;
   }
   .row-check {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.4rem 0;
-    font-size: 0.85rem;
-    font-weight: 500;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.4rem 0; font-size: 0.85rem; font-weight: 500;
   }
   .row-check input { width: 17px; height: 17px; accent-color: var(--warm); }
   .sub-field { padding-left: 0; margin-top: -0.2rem; }
 
+  .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+  @media (max-width: 700px) { .config-grid { grid-template-columns: 1fr; } }
+
   button.primary {
-    width: 100%;
-    background: var(--accent);
-    color: var(--accent-contrast);
-    border: none;
-    padding: 0.75rem;
-    border-radius: var(--radius-pill);
-    font-size: 0.9rem;
-    font-weight: 600;
-    cursor: pointer;
-    margin-top: 1rem;
-    font-family: inherit;
-    transition: transform 120ms ease, filter 120ms ease;
+    background: var(--accent); color: var(--accent-contrast); border: none;
+    padding: 0.75rem 1.4rem; border-radius: var(--radius-pill); font-size: 0.9rem; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: transform 120ms ease, filter 120ms ease;
   }
   button.primary:hover { filter: brightness(1.25); transform: translateY(-1px); }
+  button.secondary {
+    background: var(--surface-soft); border: 1px solid var(--border); color: var(--text);
+    padding: 0.75rem 1.3rem; border-radius: var(--radius-pill); font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  button.secondary:hover { filter: brightness(0.97); }
 
-  /* Modal */
-  .modal-backdrop {
-    position: fixed; inset: 0;
-    background: rgba(43,36,26,0.45);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    padding: 2rem;
+  .stage-nav { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: 1.5rem; }
+
+  /* ---------- Stage 1: type picker ---------- */
+  .type-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem; }
+  @media (max-width: 720px) { .type-grid { grid-template-columns: 1fr; } }
+  .type-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card); overflow: hidden; display: flex; flex-direction: column;
   }
-  .modal-backdrop.open { display: flex; }
-  .modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-pop);
-    width: min(720px, 100%);
-    max-height: 85vh;
-    display: flex;
-    flex-direction: column;
-  }
-  .modal-header {
-    padding: 1.1rem 1.35rem;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .modal-header h3 { margin: 0; font-size: 0.98rem; font-weight: 700; color: var(--text); text-transform: none; letter-spacing: 0; }
-  .modal-header button {
-    background: var(--surface-soft); border: 1px solid var(--border); color: var(--text-dim);
-    font-size: 1.1rem; cursor: pointer; width: 30px; height: 30px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; line-height: 1;
-  }
-  .modal-body { padding: 1.35rem; overflow-y: auto; }
-  .modal-body p { color: var(--text-dim); font-size: 0.82rem; line-height: 1.5; }
-  textarea#embed-output {
-    width: 100%;
-    height: 260px;
-    background: #241f1a;
-    color: #f4dfc9;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    font-family: "SF Mono", Menlo, Consolas, monospace;
-    font-size: 0.72rem;
-    padding: 0.85rem;
-    resize: vertical;
-  }
-  .copy-btn {
-    margin-top: 0.75rem;
-    background: var(--warm);
-    color: #2b1a0f;
-    border: none;
-    padding: 0.65rem 1.1rem;
-    border-radius: var(--radius-pill);
-    font-weight: 600;
-    cursor: pointer;
-    font-size: 0.85rem;
+  .type-card-preview { background: #1c1712; }
+  .type-card-body { padding: 1.1rem 1.25rem 1.25rem; }
+  .type-card h3 { margin: 0 0 0.3rem; font-size: 1rem; }
+  .type-card p { margin: 0 0 0.9rem; color: var(--text-dim); font-size: 0.85rem; line-height: 1.45; }
+  .type-card button.primary { width: 100%; }
+
+  /* ---------- Stage 3: preview ---------- */
+  .device-toggle { display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 1.25rem; }
+  .device-toggle button {
+    background: var(--surface-soft); border: 1px solid var(--border); border-radius: var(--radius-pill);
+    padding: 0.5rem 1rem; font-size: 0.82rem; font-weight: 600; cursor: pointer; color: var(--text-dim);
     font-family: inherit;
-    transition: filter 120ms ease;
   }
-  .copy-btn:hover { filter: brightness(1.08); }
-  .copy-btn.copied { background: #b7d99a; color: #1e2b0f; }
-
-  /* Live preview slider tweaks so it fits nicely regardless of user theme */
-  #preview-slider { background: #1c1712; max-width: 100%; border-radius: var(--radius-md); overflow: hidden; }
-
-  /* Placeholder slides stand in for the user's own images in the preview */
-  .sb-placeholder {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: rgba(255,255,255,0.9);
-    font-size: 1.1rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
+  .device-toggle button.is-active { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+  .preview-outer {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 2rem 1.5rem; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-card);
   }
-
-  /* Presets */
-  .preset-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.55rem;
-  }
-  .preset-btn {
-    text-align: left;
-    background: var(--surface-soft);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: var(--radius-md);
-    padding: 0.65rem 0.8rem;
-    cursor: pointer;
-    font-family: inherit;
-    transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
-  }
-  .preset-btn:hover { border-color: var(--warm); transform: translateY(-1px); box-shadow: var(--shadow-card); }
-  .preset-btn.is-active { border-color: var(--warm); background: var(--warm-soft); }
-  .preset-btn .preset-name { font-size: 0.85rem; font-weight: 700; display: block; }
-  .preset-btn .preset-hint { font-size: 0.75rem; color: var(--text-dim); display: block; margin-top: 0.15rem; }
-
-  /* Thumbnail nav preview (shown only for the Thumbnail-Nav Gallery preset) */
+  .preview-frame { width: 100%; margin: 0 auto; transition: max-width 200ms ease; }
+  .preview-frame.size-desktop { max-width: 760px; }
+  .preview-frame.size-tablet { max-width: 560px; }
+  .preview-frame.size-mobile { max-width: 320px; }
   .preview-nav-wrap { width: 100%; margin-top: 0.75rem; display: none; }
   .preview-nav-wrap.visible { display: block; }
   #preview-nav-slider { background: #1c1712; border-radius: var(--radius-md); overflow: hidden; }
 
-  /* Small rounded "pill" chips, e.g. as used for load-config controls */
+  /* ---------- Stage 4: export ---------- */
+  .copy-btn {
+    margin-top: 0.75rem; background: var(--warm); color: #2b1a0f; border: none;
+    padding: 0.65rem 1.1rem; border-radius: var(--radius-pill); font-weight: 600; cursor: pointer;
+    font-size: 0.85rem; font-family: inherit; transition: filter 120ms ease;
+  }
+  .copy-btn:hover { filter: brightness(1.08); }
+  .copy-btn.copied { background: #b7d99a; color: #1e2b0f; }
+  textarea#embed-output {
+    width: 100%; height: 260px; background: #241f1a; color: #f4dfc9; border: 1px solid var(--border);
+    border-radius: var(--radius-md); font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.72rem;
+    padding: 0.85rem; resize: vertical;
+  }
   #load-id-btn, #save-config-btn {
-    font-family: inherit;
-    border-radius: var(--radius-pill) !important;
+    font-family: inherit; border-radius: var(--radius-pill) !important;
     transition: filter 120ms ease, transform 120ms ease;
   }
   #load-id-btn:hover, #save-config-btn:hover { filter: brightness(0.97); transform: translateY(-1px); }
   #load-id-input {
-    font-family: inherit;
-    background: var(--surface-soft);
-    border: 1px solid var(--border);
-    color: var(--text);
-    border-radius: var(--radius-sm);
-    padding: 0.45rem 0.6rem;
-    font-size: 0.85rem;
+    font-family: inherit; background: var(--surface-soft); border: 1px solid var(--border); color: var(--text);
+    border-radius: var(--radius-sm); padding: 0.45rem 0.6rem; font-size: 0.85rem;
+  }
+
+  /* ---------- Live preview slider look ---------- */
+  #preview-slider, .type-card-preview .slider-bit { background: #1c1712; max-width: 100%; overflow: hidden; }
+
+  /* Shared caption/overlay chrome, reused across stage-1 cards, stage-3 preview
+     and exported embeds (plain CSS positioned inside a .slider-bit__slide --
+     works whether Slider Bit built it or the raw markup already had it). */
+  .sb-caption {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 1.1rem 1rem;
+    background: linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0));
+    color: #fff; pointer-events: none;
+  }
+  .sb-caption-title { font-weight: 800; font-size: 1rem; letter-spacing: 0.02em; }
+  .sb-caption-sub { font-size: 0.76rem; opacity: 0.8; margin-top: 0.15rem; }
+  .sb-counter {
+    position: absolute; top: 0.8rem; right: 0.9rem; color: #fff; font-size: 0.76rem; font-weight: 700;
+    letter-spacing: 0.08em; z-index: 2; text-shadow: 0 1px 3px rgba(0,0,0,0.5); pointer-events: none;
+  }
+  .sb-hero-kicker {
+    position: absolute; left: 1.4rem; bottom: 4.6rem; color: #fff; font-size: 0.72rem;
+    letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.75; pointer-events: none;
+  }
+  .sb-hero-headline {
+    position: absolute; left: 1.4rem; bottom: 1.8rem; color: #fff;
+    font-size: clamp(1.3rem, 4vw, 2.4rem); font-weight: 800; letter-spacing: 0.01em;
+    text-transform: uppercase; text-shadow: 0 2px 10px rgba(0,0,0,0.45); max-width: 75%; pointer-events: none;
+  }
+  .sb-tilt-label {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 0.6rem 0.75rem;
+    background: linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0));
+    color: #fff; font-size: 0.8rem; font-weight: 700; pointer-events: none;
   }
 </style>
 </head>
@@ -355,46 +257,144 @@
 <header>
   <div class="brand">
     <h1>Slider<span>Bit</span></h1>
-    <p style="margin-left:0.5rem; padding-left:0.5rem; border-left:1px solid var(--border); color:var(--text-dim); font-size:0.82rem;">Configure your slider, then copy the embed code into Webflow</p>
+    <p style="margin-left:0.5rem; padding-left:0.5rem; border-left:1px solid var(--border); color:var(--text-dim); font-size:0.82rem;">Pick a style, customize it, then grab the embed code</p>
   </div>
-  <button class="primary" style="width:auto; margin:0; padding:0.7rem 1.3rem;" id="open-embed">Get Embed Code</button>
+  <button id="start-over-link" type="button">Start over</button>
 </header>
 
-<div class="layout">
+<ol class="stepper" id="stepper">
+  <li><button type="button" data-stage="choose"><span class="step-num">1</span>Choose</button></li>
+  <li><button type="button" data-stage="modify" disabled><span class="step-num">2</span>Customize</button></li>
+  <li><button type="button" data-stage="preview" disabled><span class="step-num">3</span>Preview</button></li>
+  <li><button type="button" data-stage="export" disabled><span class="step-num">4</span>Export</button></li>
+</ol>
 
-  <!-- LEFT: Preview + saved configs -->
-  <div class="panel">
-    <div class="dash-card">
-      <h2>Presets</h2>
-      <p class="empty-hint" style="margin-top:0;">One-click starting points — pick one, then fine-tune with the controls on the right.</p>
-      <div class="preset-grid" id="preset-grid"></div>
-    </div>
+<!-- STAGE 1: choose a style -->
+<section class="stage is-active" data-stage="choose" style="max-width:1050px;">
+  <p class="stage-title">Choose a carousel style</p>
+  <p class="stage-sub">Each is a real, fully working carousel — try the arrows, drag it, watch it loop. Pick the one closest to what you want, then fine-tune everything on the next screen.</p>
+  <div class="type-grid" id="type-grid"></div>
+</section>
 
-    <div class="dash-card">
-      <h2>Preview</h2>
-      <p class="empty-hint" style="margin-top:0;">Slider Bit doesn't host your images — you use your own (already in Webflow, or a CMS Collection List). This preview uses placeholder slides just so you can see how your settings behave.</p>
-      <div class="field">
-        <label>Placeholder slides <span id="slideCount-val">5</span></label>
-        <input type="range" id="slideCount" min="1" max="12" step="1" value="5">
+<!-- STAGE 2: modify -->
+<section class="stage" data-stage="modify">
+  <p class="stage-title">Customize your carousel</p>
+  <p class="stage-sub">Adjust layout, behavior and style. You'll see the real result on the next screen.</p>
+
+  <div class="config-grid">
+    <div>
+      <div class="dash-card">
+        <h2>Layout</h2>
+        <div class="field">
+          <label>Slides per view <span id="perPage-val">1</span></label>
+          <input type="range" id="perPage" min="1" max="6" step="1" value="1">
+        </div>
+        <div class="field">
+          <label>Gap (px) <span id="gap-val">16</span></label>
+          <input type="range" id="gap" min="0" max="64" step="2" value="16">
+        </div>
+        <div class="field">
+          <label>Aspect ratio</label>
+          <select id="aspectRatio">
+            <option value="16/9">16:9 (widescreen)</option>
+            <option value="4/3">4:3</option>
+            <option value="1/1">1:1 (square)</option>
+            <option value="21/9">21:9 (ultra-wide)</option>
+            <option value="3/4">3:4 (portrait)</option>
+            <option value="2/3">2:3 (poster)</option>
+            <option value="4/5">4:5 (portrait card)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Direction</label>
+          <select id="direction">
+            <option value="ltr" selected>Horizontal</option>
+            <option value="rtl">Horizontal (right to left)</option>
+            <option value="vertical">Vertical</option>
+          </select>
+        </div>
+        <div class="row-check"><label for="focusCenter">Center focus</label><input type="checkbox" id="focusCenter"></div>
+        <div class="field">
+          <label>Peek next/prev slide (px) <span id="peek-val">0</span></label>
+          <input type="range" id="peek" min="0" max="120" step="4" value="0">
+        </div>
+        <div class="field">
+          <label>Outer padding (px) <span id="padding-val">0</span></label>
+          <input type="range" id="padding" min="0" max="64" step="2" value="0">
+        </div>
+        <div class="row-check"><label for="mobileOverride">Different layout on mobile</label><input type="checkbox" id="mobileOverride"></div>
+        <div class="field sub-field" id="mobile-perPage-field" style="display:none;">
+          <label>Slides per view on mobile (&le;768px) <span id="mobilePerPage-val">1</span></label>
+          <input type="range" id="mobilePerPage" min="1" max="4" step="1" value="1">
+        </div>
+      </div>
+
+      <div class="dash-card">
+        <h2>Behavior</h2>
+        <div class="field">
+          <label>Transition</label>
+          <select id="type">
+            <option value="slide" selected>Slide</option>
+            <option value="fade">Fade</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Speed (ms) <span id="speed-val">500</span></label>
+          <input type="range" id="speed" min="150" max="1200" step="50" value="500">
+        </div>
+        <div class="row-check"><label for="loop">Loop</label><input type="checkbox" id="loop" checked></div>
+        <div class="row-check"><label for="autoplay">Autoplay</label><input type="checkbox" id="autoplay"></div>
+        <div class="field sub-field" id="interval-field" style="display:none;">
+          <label>Interval (ms) <span id="interval-val">4000</span></label>
+          <input type="range" id="interval" min="1500" max="10000" step="250" value="4000">
+        </div>
+        <div class="row-check"><label for="pauseOnHover">Pause on hover</label><input type="checkbox" id="pauseOnHover" checked></div>
+        <div class="row-check"><label for="drag">Drag / swipe</label><input type="checkbox" id="drag" checked></div>
+        <div class="row-check"><label for="wheel">Mouse wheel nav</label><input type="checkbox" id="wheel"></div>
+        <div class="row-check"><label for="keyboard">Keyboard nav</label><input type="checkbox" id="keyboard" checked></div>
       </div>
     </div>
 
-    <div class="dash-card">
-      <h2>Saved configs</h2>
-      <p class="empty-hint" style="margin-top:0;">Optional: save these settings under a short ID so multiple pages can share them without re-pasting JSON.</p>
-      <div class="field">
-        <label>Load a saved config</label>
-        <div style="display:flex; gap:0.4rem;">
-          <input type="text" id="load-id-input" placeholder="Paste config ID">
-          <button type="button" id="load-id-btn" style="flex-shrink:0; background:var(--surface-soft); border:1px solid var(--border); color:var(--text); padding:0.45rem 0.8rem; cursor:pointer; font-size:0.8rem; font-weight:600;">Load</button>
+    <div>
+      <div class="dash-card">
+        <h2>Style</h2>
+        <div class="row-check"><label for="arrows">Arrows</label><input type="checkbox" id="arrows" checked></div>
+        <div class="row-check"><label for="pagination">Pagination dots</label><input type="checkbox" id="pagination" checked></div>
+        <div class="field">
+          <label>Arrow color</label>
+          <input type="color" id="arrowColor" value="#1a1a1a">
+        </div>
+        <div class="field">
+          <label>Dot color (active)</label>
+          <input type="color" id="dotColorActive" value="#ffffff">
+        </div>
+        <div class="field">
+          <label>Corner radius (px) <span id="radius-val">8</span></label>
+          <input type="range" id="radius" min="0" max="32" step="1" value="8">
         </div>
       </div>
     </div>
   </div>
 
-  <!-- CENTER: Live preview -->
-  <div class="preview-wrap">
-    <div class="preview-stage">
+  <div class="stage-nav">
+    <button type="button" class="secondary" data-back="choose">&larr; Back</button>
+    <button type="button" class="primary" data-continue="preview">Continue to Preview &rarr;</button>
+  </div>
+</section>
+
+<!-- STAGE 3: preview -->
+<section class="stage" data-stage="preview">
+  <p class="stage-title">Preview your carousel</p>
+  <p class="stage-sub">This is the real result with your settings applied. Check how it looks at different sizes before exporting.</p>
+
+  <div class="device-toggle" id="device-toggle">
+    <button type="button" data-size="desktop" class="is-active">Desktop</button>
+    <button type="button" data-size="tablet">Tablet</button>
+    <button type="button" data-size="mobile">Mobile</button>
+  </div>
+
+  <div class="preview-outer">
+    <div class="preview-frame size-desktop" id="preview-frame">
       <div class="slider-bit" id="preview-slider">
         <div class="slider-bit__track"></div>
       </div>
@@ -404,131 +404,54 @@
         </div>
       </div>
     </div>
-    <div class="preview-hint">Live preview (placeholder slides) — updates as you change settings.</div>
   </div>
 
-  <!-- RIGHT: Config -->
-  <div class="panel">
-    <div class="dash-card">
-    <h2>Layout</h2>
-    <div class="field">
-      <label>Slides per view <span id="perPage-val">1</span></label>
-      <input type="range" id="perPage" min="1" max="6" step="1" value="1">
-    </div>
-    <div class="field">
-      <label>Gap (px) <span id="gap-val">16</span></label>
-      <input type="range" id="gap" min="0" max="64" step="2" value="16">
-    </div>
-    <div class="field">
-      <label>Aspect ratio</label>
-      <select id="aspectRatio">
-        <option value="16/9" selected>16:9 (widescreen)</option>
-        <option value="4/3">4:3</option>
-        <option value="1/1">1:1 (square)</option>
-        <option value="21/9">21:9 (ultra-wide)</option>
-        <option value="3/4">3:4 (portrait)</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Direction</label>
-      <select id="direction">
-        <option value="ltr" selected>Horizontal</option>
-        <option value="rtl">Horizontal (right to left)</option>
-        <option value="vertical">Vertical</option>
-      </select>
-    </div>
-    <div class="row-check"><label for="focusCenter">Center focus</label><input type="checkbox" id="focusCenter"></div>
-    <div class="field">
-      <label>Peek next/prev slide (px) <span id="peek-val">0</span></label>
-      <input type="range" id="peek" min="0" max="120" step="4" value="0">
-    </div>
-    <div class="field">
-      <label>Outer padding (px) <span id="padding-val">0</span></label>
-      <input type="range" id="padding" min="0" max="64" step="2" value="0">
-    </div>
-    <div class="row-check"><label for="mobileOverride">Different layout on mobile</label><input type="checkbox" id="mobileOverride"></div>
-    <div class="field sub-field" id="mobile-perPage-field" style="display:none;">
-      <label>Slides per view on mobile (&le;768px) <span id="mobilePerPage-val">1</span></label>
-      <input type="range" id="mobilePerPage" min="1" max="4" step="1" value="1">
-    </div>
-    </div>
+  <div class="stage-nav">
+    <button type="button" class="secondary" data-back="modify">&larr; Back to Customize</button>
+    <button type="button" class="primary" data-continue="export">Continue to Export &rarr;</button>
+  </div>
+</section>
 
-    <div class="dash-card">
-    <h2>Behavior</h2>
-    <div class="field">
-      <label>Transition</label>
-      <select id="type">
-        <option value="slide" selected>Slide</option>
-        <option value="fade">Fade</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Speed (ms) <span id="speed-val">500</span></label>
-      <input type="range" id="speed" min="150" max="1200" step="50" value="500">
-    </div>
-    <div class="row-check"><label for="loop">Loop</label><input type="checkbox" id="loop" checked></div>
-    <div class="row-check"><label for="autoplay">Autoplay</label><input type="checkbox" id="autoplay"></div>
-    <div class="field sub-field" id="interval-field" style="display:none;">
-      <label>Interval (ms) <span id="interval-val">4000</span></label>
-      <input type="range" id="interval" min="1500" max="10000" step="250" value="4000">
-    </div>
-    <div class="row-check"><label for="pauseOnHover">Pause on hover</label><input type="checkbox" id="pauseOnHover" checked></div>
-    <div class="row-check"><label for="drag">Drag / swipe</label><input type="checkbox" id="drag" checked></div>
-    <div class="row-check"><label for="wheel">Mouse wheel nav</label><input type="checkbox" id="wheel"></div>
-    <div class="row-check"><label for="keyboard">Keyboard nav</label><input type="checkbox" id="keyboard" checked></div>
-    </div>
+<!-- STAGE 4: export -->
+<section class="stage" data-stage="export">
+  <p class="stage-title">Embed code</p>
+  <p class="stage-sub" id="embed-status">Paste this into a Webflow Embed element, then replace the example slide with your own images (or point <code>.slider-bit__track</code> at a CMS Collection List instead — see the comment in the code).</p>
 
-    <div class="dash-card">
-    <h2>Style</h2>
-    <div class="row-check"><label for="arrows">Arrows</label><input type="checkbox" id="arrows" checked></div>
-    <div class="row-check"><label for="pagination">Pagination dots</label><input type="checkbox" id="pagination" checked></div>
-    <div class="field">
-      <label>Arrow color</label>
-      <input type="color" id="arrowColor" value="#1a1a1a">
-    </div>
-    <div class="field">
-      <label>Dot color (active)</label>
-      <input type="color" id="dotColorActive" value="#ffffff">
-    </div>
-    <div class="field">
-      <label>Corner radius (px) <span id="radius-val">8</span></label>
-      <input type="range" id="radius" min="0" max="32" step="1" value="8">
-    </div>
+  <div class="dash-card">
+    <textarea id="embed-output" readonly></textarea>
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin-top:0.75rem;">
+      <button class="copy-btn" id="copy-btn" style="margin-top:0;">Copy to clipboard</button>
+      <button type="button" id="toggle-embed-mode" style="background:none; border:none; color:var(--text-dim); font-size:0.78rem; cursor:pointer; text-decoration:underline; padding:0; font-family:inherit;">Use self-contained code instead</button>
     </div>
   </div>
-</div>
+
+  <div class="dash-card">
+    <h2>Saved configs</h2>
+    <p style="margin-top:0; color:var(--text-dim); font-size:0.82rem;">Using these settings on more than one page? Save them under a short ID instead of re-pasting the JSON each time.</p>
+    <button type="button" id="save-config-btn" style="background:var(--surface-soft); border:1px solid var(--border); color:var(--text); padding:0.55rem 0.9rem; cursor:pointer; font-size:0.82rem; font-weight:600;">Save config for reuse</button>
+    <p id="slider-id-note" style="display:none; margin-top:0.75rem; font-size:0.82rem;">Config ID: <code id="slider-id-value"></code> — paste this same ID into other embeds' <code>data-sliderbit-config-id</code>, or into "Load a saved config" below to edit it.</p>
+
+    <div style="border-top:1px solid var(--border); margin-top:1rem; padding-top:1rem;">
+      <label style="display:block; font-size:0.8rem; color:var(--text-dim); margin-bottom:0.35rem; font-weight:500;">Load a saved config</label>
+      <div style="display:flex; gap:0.4rem;">
+        <input type="text" id="load-id-input" placeholder="Paste config ID">
+        <button type="button" id="load-id-btn" style="flex-shrink:0; background:var(--surface-soft); border:1px solid var(--border); color:var(--text); padding:0.45rem 0.8rem; cursor:pointer; font-size:0.8rem; font-weight:600;">Load</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-nav">
+    <button type="button" class="secondary" data-back="preview">&larr; Back to Preview</button>
+    <button type="button" class="primary" id="start-over-btn">Start a new carousel</button>
+  </div>
+</section>
 
 </div><!-- /.app-shell -->
-
-<!-- Embed modal -->
-<div class="modal-backdrop" id="modal-backdrop">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>Embed code for Webflow</h3>
-      <button id="close-modal">&times;</button>
-    </div>
-    <div class="modal-body">
-      <p id="embed-status">Paste this into a Webflow Embed element, then replace the example slide with your own images (or point <code>.slider-bit__track</code> at a CMS Collection List instead — see the comment in the code).</p>
-      <textarea id="embed-output" readonly></textarea>
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; margin-top:0.75rem;">
-        <button class="copy-btn" id="copy-btn" style="margin-top:0;">Copy to clipboard</button>
-        <button type="button" id="toggle-embed-mode" style="background:none; border:none; color:var(--text-dim); font-size:0.78rem; cursor:pointer; text-decoration:underline; padding:0;">Use self-contained code instead</button>
-      </div>
-      <div style="border-top:1px solid var(--border); margin-top:1rem; padding-top:1rem;">
-        <p style="margin-top:0;">Using these settings on more than one page? Save them under a short ID instead of re-pasting the JSON each time.</p>
-        <button type="button" id="save-config-btn" style="background:var(--surface-soft); border:1px solid var(--border); color:var(--text); padding:0.55rem 0.9rem; cursor:pointer; font-size:0.82rem; font-weight:600;">Save config for reuse</button>
-        <p id="slider-id-note" style="display:none; margin-top:0.75rem;">Config ID: <code id="slider-id-value"></code> — paste this same ID into other embeds' <code>data-sliderbit-config-id</code>, or into "Load a saved config" later to edit it.</p>
-      </div>
-    </div>
-  </div>
-</div>
 
 <script>
 /* =========================================================
    Slider Bit engine (same as sliderbit.js) — inlined so this
    file works standalone as both the dashboard AND the live preview.
-   Kept in sync with sliderbit.js (minus the auto-init/remote-hydration
-   parts, which the dashboard doesn't need for its own preview).
    ========================================================= */
 (function (global) {
   'use strict';
@@ -605,6 +528,16 @@
     this.liveRegion.setAttribute('aria-live', 'polite');
     this.liveRegion.setAttribute('aria-atomic', 'true');
     el.appendChild(this.liveRegion);
+    this.counterEl = el.querySelector('[data-sliderbit-counter]');
+    if (this.counterEl) {
+      var self_counter = this;
+      var updateCounter = function (realIndex) {
+        var total = self_counter.cloneCount ? self_counter.realCount : self_counter.slides.length;
+        self_counter.counterEl.textContent = pad2(realIndex + 1) + ' — ' + pad2(total);
+      };
+      this._onChange(updateCounter);
+      updateCounter(this._realIndex());
+    }
     if (this.options.arrows && this.slides.length > 1) {
       this.prevBtn = this._createArrow('prev', '‹');
       this.nextBtn = this._createArrow('next', '›');
@@ -722,6 +655,7 @@
     apply();
     global.addEventListener('resize', debounce(apply, 150));
   };
+  function pad2(n) { return n < 10 ? '0' + n : '' + n; }
   function debounce(fn, wait) {
     var t;
     return function () {
@@ -794,9 +728,6 @@
         if (Math.abs(mainDelta) <= Math.abs(crossDelta)) { dragging = false; return; }
         committed = true;
         self._dragging = true;
-        // A real drag gesture always takes priority over any pending loop
-        // snap-back -- cancel it now so the eventual release move isn't
-        // silently ignored by the _locked guard in _moveTo.
         self._cancelSnapBack();
         track.classList.add('slider-bit__track--dragging');
       }
@@ -858,15 +789,6 @@
     candidates.forEach(function (c) { if (Math.abs(c - self.index) < Math.abs(best - self.index)) best = c; });
     this._moveTo(best, true);
   };
-  // On a looping slider, the clone buffer only extends a couple of slides past
-  // the real range (see _buildClones), so rapid repeated calls -- mashing an
-  // arrow button, holding an arrow key (which key-repeats far faster than the
-  // transition can settle), or overlapping autoplay ticks with a short custom
-  // interval -- can walk `index` past the last real clone in the DOM before the
-  // previous move has snapped back. That leaves the track transformed to a
-  // position with no matching slide: a visible glitch, not a seamless loop.
-  // `_locked` blocks new loop-moves until the in-flight one has settled, the
-  // same way most carousel libraries (e.g. Splide's `waitForTransition`) do.
   SliderBit.prototype._moveTo = function (target, animate) {
     if (animate && this.cloneCount && this._locked) {
       this._pendingMove = target;
@@ -983,6 +905,11 @@
     }
     if (this.prevBtn) this.prevBtn.disabled = !this.options.loop && this.index <= 0;
     if (this.nextBtn) this.nextBtn.disabled = !this.options.loop && this.index >= this.slides.length - per;
+    this.slides.forEach(function (slide, i) {
+      slide.classList.toggle('slider-bit__slide--current', i === this.index);
+      slide.classList.toggle('slider-bit__slide--prev', i === this.index - 1);
+      slide.classList.toggle('slider-bit__slide--next', i === this.index + 1);
+    }, this);
     this._updateA11y();
   };
   SliderBit.prototype._updateA11y = function () {
@@ -1052,7 +979,7 @@
 
 <script>
 /* =========================================================
-   Slider Bit — dashboard app logic
+   Slider Bit — wizard dashboard app logic
    ========================================================= */
 (function () {
   'use strict';
@@ -1061,16 +988,18 @@
   var API_BASE = window.location.origin;
   var IS_FILE_PROTOCOL = window.location.protocol === 'file:';
   var showingSelfContained = false;
+  var selectedTypeId = null;
+  var currentStage = 'choose';
+  var STAGES = ['choose', 'modify', 'preview', 'export'];
 
   var els = {
+    stepper: document.getElementById('stepper'),
+    typeGrid: document.getElementById('type-grid'),
     previewSlider: document.getElementById('preview-slider'),
+    previewFrame: document.getElementById('preview-frame'),
     previewNavWrap: document.getElementById('preview-nav-wrap'),
     previewNavSlider: document.getElementById('preview-nav-slider'),
-    presetGrid: document.getElementById('preset-grid'),
-    slideCount: document.getElementById('slideCount'),
-    openEmbed: document.getElementById('open-embed'),
-    modalBackdrop: document.getElementById('modal-backdrop'),
-    closeModal: document.getElementById('close-modal'),
+    deviceToggle: document.getElementById('device-toggle'),
     embedOutput: document.getElementById('embed-output'),
     copyBtn: document.getElementById('copy-btn'),
     embedStatus: document.getElementById('embed-status'),
@@ -1079,31 +1008,36 @@
     sliderIdNote: document.getElementById('slider-id-note'),
     sliderIdValue: document.getElementById('slider-id-value'),
     loadIdInput: document.getElementById('load-id-input'),
-    loadIdBtn: document.getElementById('load-id-btn')
+    loadIdBtn: document.getElementById('load-id-btn'),
+    startOverLink: document.getElementById('start-over-link'),
+    startOverBtn: document.getElementById('start-over-btn')
   };
 
-  var controlIds = ['perPage','gap','aspectRatio','direction','focusCenter','peek','padding','mobileOverride','mobilePerPage',
-    'type','speed','loop','autoplay',
-    'interval','pauseOnHover','drag','wheel','keyboard','arrows','pagination','arrowColor','dotColorActive','radius'];
+  var controlIds = ['perPage', 'gap', 'aspectRatio', 'direction', 'focusCenter', 'peek', 'padding', 'mobileOverride', 'mobilePerPage',
+    'type', 'speed', 'loop', 'autoplay',
+    'interval', 'pauseOnHover', 'drag', 'wheel', 'keyboard', 'arrows', 'pagination', 'arrowColor', 'dotColorActive', 'radius'];
   var controls = {};
   controlIds.forEach(function (id) { controls[id] = document.getElementById(id); });
-
-  els.slideCount.addEventListener('input', function () {
-    document.getElementById('slideCount-val').textContent = els.slideCount.value;
-    renderPreview();
-  });
 
   controls.mobileOverride.addEventListener('change', function () {
     document.getElementById('mobile-perPage-field').style.display = controls.mobileOverride.checked ? 'block' : 'none';
   });
+  controls.autoplay.addEventListener('change', function () {
+    document.getElementById('interval-field').style.display = controls.autoplay.checked ? 'block' : 'none';
+  });
+  ['perPage', 'gap', 'speed', 'interval', 'radius', 'peek', 'padding', 'mobilePerPage'].forEach(function (id) {
+    controls[id].addEventListener('input', function () {
+      document.getElementById(id + '-val').textContent = controls[id].value;
+    });
+  });
 
-  /* ---------- Config ---------- */
+  /* ---------- Config (unchanged shape from the single-screen dashboard) ---------- */
   function currentConfig() {
     return {
       type: controls.type.value,
       direction: controls.direction.value,
       perPage: Number(controls.perPage.value),
-      perMove: 1, // move one slide at a time even when showing multiple per view (smoother feel)
+      perMove: 1,
       gap: Number(controls.gap.value) + 'px',
       aspectRatio: controls.aspectRatio.value,
       focus: controls.focusCenter.checked ? 'center' : false,
@@ -1120,9 +1054,6 @@
       wheel: controls.wheel.checked,
       keyboard: controls.keyboard.checked,
       lazyLoad: true,
-      // Simple mobile override: at <=768px, drop to the chosen slides-per-view.
-      // The engine's own breakpoints support (see _applyResponsive) merges
-      // these on top of the base config once the viewport crosses the width.
       breakpoints: controls.mobileOverride.checked
         ? { 768: { perPage: Number(controls.mobilePerPage.value) } }
         : {}
@@ -1155,10 +1086,7 @@
     }
     if (config.aspectRatio) controls.aspectRatio.value = config.aspectRatio;
     controls.focusCenter.checked = config.focus === 'center';
-    // peek/padding/mobile breakpoint always reset (defaulting to off) rather
-    // than being guarded by a presence check, so switching between presets
-    // -- most of which don't set these -- doesn't leave a stale value behind
-    // from whatever was configured before.
+
     var peekVal = 0;
     if (config.peek != null) peekVal = typeof config.peek === 'object' ? (config.peek.start || 0) : config.peek;
     controls.peek.value = peekVal;
@@ -1171,6 +1099,7 @@
     }
     controls.padding.value = padVal;
     document.getElementById('padding-val').textContent = padVal;
+
     var mobileBp = config.breakpoints && config.breakpoints[768];
     controls.mobileOverride.checked = !!mobileBp;
     document.getElementById('mobile-perPage-field').style.display = mobileBp ? 'block' : 'none';
@@ -1208,169 +1137,254 @@
     }
   }
 
-  /* ---------- Presets ---------- */
-  // One-click starting configs. `config`/`theme` map directly onto the same
-  // fields applyConfigToControls()/currentConfig() already read -- every
-  // field is specified explicitly so switching presets doesn't leave stale
-  // values from whatever was set before. `nav` (only on the thumbnail-gallery
-  // preset) tells renderPreview()/buildEmbedCode() to build a second, synced
-  // thumbnail-strip slider using the engine's existing sync()/data-sliderbit-sync
-  // feature, instead of just a single slider.
-  var PRESETS = {
-    hero: {
-      label: 'Hero / Gallery',
-      hint: 'Full-width banner, one slide at a time, autoplay.',
+  /* ---------- Wizard Types ----------
+     Each type is a self-contained "starting point": a base config/theme (fed
+     into the same currentConfig()/applyConfigToControls() the Customize
+     stage already uses), a set of bundled demo slides so Stage 1 and Stage 3
+     show a real, fully-populated carousel (never the user's own images --
+     Slider Bit stays bring-your-own-images for anything actually exported),
+     and an optional extraCss()/slideHtml() pair for the one or two bits of
+     purely-visual chrome (dimmed/tilted neighbors, caption overlays, a
+     progress counter) that a plain engine option can't express by itself.
+     extraCss() is scoped to a specific #id so it's safe to inline per-instance,
+     and is also what gets baked into the exported embed's <style> block. */
+  var WIZARD_TYPES = [
+    {
+      id: 'poster',
+      label: 'Poster Reel',
+      hint: 'One big image at a time with a title card and a synced thumbnail filmstrip — inspired by movie-poster style galleries.',
       config: {
-        type: 'slide', direction: 'ltr', perPage: 1, gap: '16px', aspectRatio: '16/9',
-        focus: false, loop: true, autoplay: true, interval: 5000, pauseOnHover: true,
-        speed: 500, arrows: true, pagination: true, drag: true, wheel: false, keyboard: true
-      },
-      theme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 8 }
-    },
-    product: {
-      label: 'Product Grid Carousel',
-      hint: 'Several cards per view, arrows only, no autoplay.',
-      config: {
-        type: 'slide', direction: 'ltr', perPage: 4, gap: '16px', aspectRatio: '4/3',
-        focus: false, loop: true, autoplay: false, interval: 4000, pauseOnHover: true,
-        speed: 450, arrows: true, pagination: false, drag: true, wheel: false, keyboard: true
-      },
-      theme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 8 }
-    },
-    testimonial: {
-      label: 'Testimonial / Quote Slider',
-      hint: 'One quote at a time, slow fade, dots only.',
-      config: {
-        type: 'fade', direction: 'ltr', perPage: 1, gap: '16px', aspectRatio: '16/9',
-        focus: false, loop: true, autoplay: true, interval: 7000, pauseOnHover: true,
-        speed: 600, arrows: false, pagination: true, drag: true, wheel: false, keyboard: true
-      },
-      theme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 8 }
-    },
-    logos: {
-      label: 'Logo / Brand Strip',
-      hint: 'Many small logos, continuous autoplay, no controls.',
-      config: {
-        type: 'slide', direction: 'ltr', perPage: 6, gap: '24px', aspectRatio: '21/9',
-        focus: false, loop: true, autoplay: true, interval: 2000, pauseOnHover: false,
-        speed: 800, arrows: false, pagination: false, drag: false, wheel: false, keyboard: false
-      },
-      theme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 4 }
-    },
-    thumbnav: {
-      label: 'Thumbnail-Nav Gallery',
-      hint: 'Big image + clickable thumbnail strip underneath.',
-      config: {
-        type: 'slide', direction: 'ltr', perPage: 1, gap: '16px', aspectRatio: '16/9',
+        type: 'slide', direction: 'ltr', perPage: 1, gap: '0px', aspectRatio: '2/3',
         focus: false, loop: true, autoplay: false, interval: 4000, pauseOnHover: true,
         speed: 500, arrows: true, pagination: false, drag: true, wheel: false, keyboard: true
       },
-      theme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 8 },
+      theme: { arrowColor: '#ffffff', dotColorActive: '#ffffff', radius: 12 },
+      counter: true,
       nav: true,
-      // Companion thumbnail-strip config -- not user-editable via the main
-      // controls, kept intentionally simple (no arrows/dots/autoplay on a nav strip).
       navConfig: {
-        type: 'slide', direction: 'ltr', perPage: 5, perMove: 1, gap: '8px', aspectRatio: '1/1',
+        type: 'slide', direction: 'ltr', perPage: 6, perMove: 1, gap: '8px', aspectRatio: '2/3',
         focus: false, loop: false, autoplay: false, pauseOnHover: false,
-        speed: 300, arrows: false, pagination: false, drag: true, wheel: false, keyboard: false,
-        lazyLoad: true
+        speed: 300, arrows: false, pagination: false, drag: true, wheel: false, keyboard: false, lazyLoad: true
       },
-      navTheme: { arrowColor: '#1a1a1a', dotColorActive: '#ffffff', radius: 6 }
+      navTheme: { arrowColor: '#ffffff', dotColorActive: '#ffffff', radius: 6 },
+      demoSlides: [
+        { img: 'https://picsum.photos/id/1025/700/1050', title: 'VOYAGER', sub: 'A Sci-Fi Adventure' },
+        { img: 'https://picsum.photos/id/1074/700/1050', title: 'EMBER', sub: 'An Action Thriller' },
+        { img: 'https://picsum.photos/id/1084/700/1050', title: 'NOCTURNE', sub: 'A Mystery Drama' },
+        { img: 'https://picsum.photos/id/1069/700/1050', title: 'SKYLINE', sub: 'An Urban Story' },
+        { img: 'https://picsum.photos/id/1080/700/1050', title: 'WANDERER', sub: 'An Epic Journey' },
+        { img: 'https://picsum.photos/id/1041/700/1050', title: 'SOLACE', sub: 'A Quiet Drama' }
+      ],
+      slideHtml: function (s) {
+        return '<img src="' + s.img + '" alt="' + s.title + '">' +
+          '<div class="sb-caption"><div class="sb-caption-title">' + s.title + '</div><div class="sb-caption-sub">' + s.sub + '</div></div>';
+      },
+      extraCss: function (uid) {
+        return '#' + uid + ' [data-sliderbit-counter]{}';
+      }
+    },
+    {
+      id: 'centered',
+      label: 'Centered Spotlight',
+      hint: 'The active slide takes center stage while neighbors dim and shrink beside it — full-bleed and cinematic.',
+      config: {
+        type: 'slide', direction: 'ltr', perPage: 3, gap: '24px', aspectRatio: '3/4',
+        focus: 'center', peek: 40, loop: true, autoplay: true, interval: 4500, pauseOnHover: true,
+        speed: 600, arrows: true, pagination: true, drag: true, wheel: false, keyboard: true
+      },
+      theme: { arrowColor: '#ffffff', dotColorActive: '#ffffff', radius: 16 },
+      demoSlides: [
+        { img: 'https://picsum.photos/id/1015/900/1200', title: 'Highland Pass' },
+        { img: 'https://picsum.photos/id/1016/900/1200', title: 'Coastal Ridge' },
+        { img: 'https://picsum.photos/id/1018/900/1200', title: 'Desert Bloom' },
+        { img: 'https://picsum.photos/id/1019/900/1200', title: 'Glacier Point' },
+        { img: 'https://picsum.photos/id/1024/900/1200', title: 'Forest Line' },
+        { img: 'https://picsum.photos/id/1039/900/1200', title: 'River Bend' }
+      ],
+      slideHtml: function (s) {
+        return '<img src="' + s.img + '" alt="' + s.title + '">' +
+          '<div class="sb-caption"><div class="sb-caption-title">' + s.title + '</div></div>';
+      },
+      extraCss: function (uid) {
+        return '#' + uid + ' .slider-bit__slide:not(.slider-bit__slide--current){opacity:.45;transform:scale(.88);}' +
+          '#' + uid + ' .slider-bit__slide--current{opacity:1;transform:scale(1);}';
+      }
+    },
+    {
+      id: 'hero',
+      label: 'Hero Statement',
+      hint: 'One full-width image at a time with a bold headline overlaid — great for a landing-page hero banner.',
+      config: {
+        type: 'slide', direction: 'ltr', perPage: 1, gap: '0px', aspectRatio: '21/9',
+        focus: false, loop: true, autoplay: true, interval: 5000, pauseOnHover: true,
+        speed: 700, arrows: true, pagination: true, drag: true, wheel: false, keyboard: true
+      },
+      theme: { arrowColor: '#ffffff', dotColorActive: '#ffffff', radius: 0 },
+      demoSlides: [
+        { img: 'https://picsum.photos/id/1050/1600/686', kicker: 'Chapter One', headline: 'REACH HIGHER' },
+        { img: 'https://picsum.photos/id/1056/1600/686', kicker: 'Chapter Two', headline: 'STAY BOLD' },
+        { img: 'https://picsum.photos/id/1060/1600/686', kicker: 'Chapter Three', headline: 'MOVE FORWARD' },
+        { img: 'https://picsum.photos/id/1067/1600/686', kicker: 'Chapter Four', headline: 'THINK WIDER' },
+        { img: 'https://picsum.photos/id/1076/1600/686', kicker: 'Chapter Five', headline: 'RISE TOGETHER' }
+      ],
+      slideHtml: function (s) {
+        return '<img src="' + s.img + '" alt="' + s.headline + '">' +
+          '<div class="sb-hero-kicker">' + s.kicker + '</div><div class="sb-hero-headline">' + s.headline + '</div>';
+      },
+      extraCss: function () { return ''; }
+    },
+    {
+      id: 'tilt3d',
+      label: 'Tilt Showcase',
+      hint: 'Neighboring cards tilt away in 3D perspective around the focused one — a coverflow-style portfolio reel.',
+      config: {
+        type: 'slide', direction: 'ltr', perPage: 3, gap: '20px', aspectRatio: '4/5',
+        focus: 'center', peek: 20, loop: true, autoplay: false, interval: 4000, pauseOnHover: true,
+        speed: 550, arrows: true, pagination: false, drag: true, wheel: false, keyboard: true
+      },
+      theme: { arrowColor: '#1a1a1a', dotColorActive: '#1a1a1a', radius: 14 },
+      demoSlides: [
+        { img: 'https://picsum.photos/id/1082/900/1125', title: 'Northwind' },
+        { img: 'https://picsum.photos/id/1035/900/1125', title: 'Aurora' },
+        { img: 'https://picsum.photos/id/1043/900/1125', title: 'Vertex' },
+        { img: 'https://picsum.photos/id/1044/900/1125', title: 'Meridian' },
+        { img: 'https://picsum.photos/id/1047/900/1125', title: 'Cascade' },
+        { img: 'https://picsum.photos/id/1048/900/1125', title: 'Halcyon' },
+        { img: 'https://picsum.photos/id/1052/900/1125', title: 'Beacon' },
+        { img: 'https://picsum.photos/id/1055/900/1125', title: 'Zephyr' }
+      ],
+      slideHtml: function (s) {
+        return '<img src="' + s.img + '" alt="' + s.title + '">' +
+          '<div class="sb-tilt-label">' + s.title + '</div>';
+      },
+      extraCss: function (uid) {
+        return '#' + uid + ' .slider-bit__track{perspective:1200px;}' +
+          '#' + uid + ' .slider-bit__slide{opacity:.5;}' +
+          '#' + uid + ' .slider-bit__slide--current{opacity:1;transform:none;}' +
+          '#' + uid + ' .slider-bit__slide--prev{transform:rotateY(22deg) scale(.92);transform-origin:right center;}' +
+          '#' + uid + ' .slider-bit__slide--next{transform:rotateY(-22deg) scale(.92);transform-origin:left center;}';
+      }
     }
-  };
+  ];
 
-  var activePresetId = null;
-
-  function renderPresetButtons() {
-    els.presetGrid.innerHTML = '';
-    Object.keys(PRESETS).forEach(function (id) {
-      var preset = PRESETS[id];
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'preset-btn';
-      btn.dataset.preset = id;
-      btn.innerHTML = '<span class="preset-name">' + preset.label + '</span><span class="preset-hint">' + preset.hint + '</span>';
-      btn.addEventListener('click', function () { applyPreset(id); });
-      els.presetGrid.appendChild(btn);
-    });
+  function typeById(id) {
+    for (var i = 0; i < WIZARD_TYPES.length; i++) if (WIZARD_TYPES[i].id === id) return WIZARD_TYPES[i];
+    return null;
   }
 
-  function applyPreset(id) {
-    var preset = PRESETS[id];
-    if (!preset) return;
-    activePresetId = id;
-    applyConfigToControls(preset.config, preset.theme);
-    Array.prototype.forEach.call(els.presetGrid.children, function (btn) {
-      btn.classList.toggle('is-active', btn.dataset.preset === id);
-    });
-    renderPreview();
+  function buildDemoSlidesHtml(type) {
+    return type.demoSlides.map(function (s) {
+      return '<div class="slider-bit__slide">' + type.slideHtml(s) + '</div>';
+    }).join('');
   }
 
-  ['perPage','gap','speed','interval','radius','peek','padding','mobilePerPage'].forEach(function (id) {
-    controls[id].addEventListener('input', function () {
-      document.getElementById(id + '-val').textContent = controls[id].value;
-      renderPreview();
-    });
-  });
-  controlIds.forEach(function (id) {
-    controls[id].addEventListener('change', renderPreview);
-    controls[id].addEventListener('input', renderPreview);
-  });
-  controls.autoplay.addEventListener('change', function () {
-    document.getElementById('interval-field').style.display = controls.autoplay.checked ? 'block' : 'none';
-  });
-
-  /* ---------- Live preview (placeholder slides) ---------- */
-  var PLACEHOLDER_HUES = [212, 262, 152, 22, 322, 192, 42, 282];
-
-  function buildPlaceholderSlidesHtml(count) {
-    var html = '';
-    for (var i = 0; i < count; i++) {
-      var hue = PLACEHOLDER_HUES[i % PLACEHOLDER_HUES.length];
-      html += '<div class="slider-bit__slide"><div class="sb-placeholder" style="background:linear-gradient(135deg, hsl(' +
-        hue + ',55%,42%), hsl(' + hue + ',55%,24%));">Slide ' + (i + 1) + '</div></div>';
+  function injectScopedCss(styleElId, cssText) {
+    var styleEl = document.getElementById(styleElId);
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = styleElId;
+      document.head.appendChild(styleEl);
     }
-    return html;
+    styleEl.textContent = cssText;
   }
 
+  /* ---------- Stage 1: type picker ---------- */
+  function renderTypeGrid() {
+    els.typeGrid.innerHTML = '';
+    WIZARD_TYPES.forEach(function (type, i) {
+      var uid = 'type-card-' + type.id;
+      var card = document.createElement('div');
+      card.className = 'type-card';
+      card.innerHTML =
+        '<div class="type-card-preview">' +
+        '  <div class="slider-bit" id="' + uid + '"><div class="slider-bit__track"></div></div>' +
+        (type.nav ? '  <div class="preview-nav-wrap visible" style="margin:0.5rem 0.5rem 0.75rem;"><div class="slider-bit" id="' + uid + '-nav"><div class="slider-bit__track"></div></div></div>' : '') +
+        '</div>' +
+        '<div class="type-card-body">' +
+        '  <h3>' + type.label + '</h3>' +
+        '  <p>' + type.hint + '</p>' +
+        '  <button type="button" class="primary" data-select-type="' + type.id + '">Use this style</button>' +
+        '</div>';
+      els.typeGrid.appendChild(card);
+
+      var el = document.getElementById(uid);
+      el.innerHTML = '<div class="slider-bit__track">' + buildDemoSlidesHtml(type) + '</div>';
+      if (type.counter) {
+        var counterEl = document.createElement('div');
+        counterEl.className = 'sb-counter';
+        counterEl.setAttribute('data-sliderbit-counter', '');
+        el.appendChild(counterEl);
+      }
+      el.setAttribute('data-sliderbit-config', JSON.stringify(type.config));
+      applyTheme(el, type.theme);
+      injectScopedCss('css-' + uid, type.extraCss(uid));
+      var inst = new SliderBit(el);
+      applyTheme(el, type.theme);
+
+      if (type.nav) {
+        var navEl = document.getElementById(uid + '-nav');
+        navEl.innerHTML = '<div class="slider-bit__track">' + buildDemoSlidesHtml(type) + '</div>';
+        navEl.setAttribute('data-sliderbit-config', JSON.stringify(type.navConfig));
+        applyTheme(navEl, type.navTheme);
+        var navInst = new SliderBit(navEl);
+        applyTheme(navEl, type.navTheme);
+        if (inst && navInst) navInst.sync(inst, { nav: true });
+      }
+    });
+
+    els.typeGrid.querySelectorAll('[data-select-type]').forEach(function (btn) {
+      btn.addEventListener('click', function () { selectType(btn.getAttribute('data-select-type')); });
+    });
+  }
+
+  function selectType(id) {
+    var type = typeById(id);
+    if (!type) return;
+    selectedTypeId = id;
+    applyConfigToControls(type.config, type.theme);
+    goToStage('modify');
+  }
+
+  /* ---------- Stage 3: preview ---------- */
   function applyTheme(el, theme) {
     el.style.setProperty('--sb-arrow-color', theme.arrowColor);
     el.style.setProperty('--sb-dot-color-active', theme.dotColorActive);
     el.style.setProperty('--sb-radius', theme.radius + 'px');
   }
 
-  function renderPreview() {
+  function renderPreviewStage() {
+    var type = typeById(selectedTypeId) || WIZARD_TYPES[0];
     var el = els.previewSlider;
     var config = currentConfig();
     var theme = currentTheme();
-    var count = Number(els.slideCount.value) || 1;
 
     el.className = 'slider-bit';
     el.removeAttribute('style');
-    el.innerHTML = '<div class="slider-bit__track">' + buildPlaceholderSlidesHtml(count) + '</div>';
+    el.innerHTML = '<div class="slider-bit__track">' + buildDemoSlidesHtml(type) + '</div>';
+    if (type.counter) {
+      var counterEl = document.createElement('div');
+      counterEl.className = 'sb-counter';
+      counterEl.setAttribute('data-sliderbit-counter', '');
+      el.appendChild(counterEl);
+    }
     el.setAttribute('data-sliderbit-config', JSON.stringify(config));
     delete el.__sliderBitInstance;
-
     applyTheme(el, theme);
+    injectScopedCss('css-preview-slider', type.extraCss('preview-slider'));
     var mainInst = new SliderBit(el);
-    // re-apply theme vars since _build() sets some inline vars too
     applyTheme(el, theme);
 
-    var preset = activePresetId ? PRESETS[activePresetId] : null;
-    if (preset && preset.nav) {
+    if (type.nav) {
       var navEl = els.previewNavSlider;
       els.previewNavWrap.classList.add('visible');
       navEl.className = 'slider-bit';
       navEl.removeAttribute('style');
-      navEl.innerHTML = '<div class="slider-bit__track">' + buildPlaceholderSlidesHtml(count) + '</div>';
-      navEl.setAttribute('data-sliderbit-config', JSON.stringify(preset.navConfig));
+      navEl.innerHTML = '<div class="slider-bit__track">' + buildDemoSlidesHtml(type) + '</div>';
+      navEl.setAttribute('data-sliderbit-config', JSON.stringify(type.navConfig));
       delete navEl.__sliderBitInstance;
-      applyTheme(navEl, preset.navTheme);
+      applyTheme(navEl, type.navTheme);
       var navInst = new SliderBit(navEl);
-      applyTheme(navEl, preset.navTheme);
-      // sync()'s `self` (the caller) becomes the clickable/highlighted thumbnail
-      // strip, and `other` is the slider that clicking a thumbnail navigates --
-      // so the nav instance must be the caller here, not the main gallery.
+      applyTheme(navEl, type.navTheme);
       if (mainInst && navInst) navInst.sync(mainInst, { nav: true });
     } else {
       els.previewNavWrap.classList.remove('visible');
@@ -1378,7 +1392,15 @@
     }
   }
 
-  /* ---------- Embed code generation ---------- */
+  els.deviceToggle.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-size]');
+    if (!btn) return;
+    var size = btn.getAttribute('data-size');
+    els.deviceToggle.querySelectorAll('button').forEach(function (b) { b.classList.toggle('is-active', b === btn); });
+    els.previewFrame.className = 'preview-frame size-' + size;
+  });
+
+  /* ---------- Stage 4: embed code generation ---------- */
   var ENGINE_JS_SOURCE = document.querySelector('script:nth-of-type(1)').textContent;
   var ENGINE_CSS_SOURCE =
     '.slider-bit{--sb-gap:1rem;--sb-padding:0;--sb-peek-start:0px;--sb-peek-end:0px;--sb-speed:500ms;--sb-easing:cubic-bezier(0.25,1,0.5,1);' +
@@ -1392,7 +1414,8 @@
     '.slider-bit__track--fade{position:relative;display:block;aspect-ratio:var(--sb-aspect-ratio);}' +
     '.slider-bit__track--draggable{cursor:grab;}' +
     '.slider-bit__track--dragging{cursor:grabbing;}' +
-    '.slider-bit__slide{flex-shrink:0;position:relative;margin-right:var(--sb-gap);overflow:hidden;border-radius:var(--sb-radius);}' +
+    '.slider-bit__slide{flex-shrink:0;position:relative;margin-right:var(--sb-gap);overflow:hidden;border-radius:var(--sb-radius);' +
+    'transition:transform var(--sb-speed) var(--sb-easing),opacity var(--sb-speed) var(--sb-easing);}' +
     '.slider-bit__slide:last-child{margin-right:0;}' +
     '.slider-bit__track--fade .slider-bit__slide{position:absolute;inset:0;margin:0;opacity:0;}' +
     '.slider-bit__slide img,.slider-bit__slide video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;user-select:none;}' +
@@ -1421,17 +1444,15 @@
     '.slider-bit--nav .slider-bit__slide.is-active{opacity:1;}' +
     '.slider-bit--nav .slider-bit__slide:focus-visible{outline:2px solid var(--sb-dot-color-active);outline-offset:2px;}' +
     '.slider-bit__live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}' +
+    '.sb-caption{position:absolute;left:0;right:0;bottom:0;padding:1.1rem 1rem;background:linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0));color:#fff;pointer-events:none;}' +
+    '.sb-caption-title{font-weight:800;font-size:1rem;letter-spacing:0.02em;}' +
+    '.sb-caption-sub{font-size:0.76rem;opacity:0.8;margin-top:0.15rem;}' +
+    '.sb-counter{position:absolute;top:0.8rem;right:0.9rem;color:#fff;font-size:0.76rem;font-weight:700;letter-spacing:0.08em;z-index:2;text-shadow:0 1px 3px rgba(0,0,0,0.5);pointer-events:none;}' +
+    '.sb-hero-kicker{position:absolute;left:1.4rem;bottom:4.6rem;color:#fff;font-size:0.72rem;letter-spacing:0.16em;text-transform:uppercase;opacity:0.75;pointer-events:none;}' +
+    '.sb-hero-headline{position:absolute;left:1.4rem;bottom:1.8rem;color:#fff;font-size:clamp(1.3rem, 4vw, 2.4rem);font-weight:800;letter-spacing:0.01em;text-transform:uppercase;text-shadow:0 2px 10px rgba(0,0,0,0.45);max-width:75%;pointer-events:none;}' +
+    '.sb-tilt-label{position:absolute;left:0;right:0;bottom:0;padding:0.6rem 0.75rem;background:linear-gradient(to top, rgba(0,0,0,0.65), rgba(0,0,0,0));color:#fff;font-size:0.8rem;font-weight:700;pointer-events:none;}' +
     '@media (prefers-reduced-motion: reduce){.slider-bit__track,.slider-bit__slide{transition:none !important;}}';
 
-  // The inline engine copy above (ENGINE_JS_SOURCE) intentionally omits
-  // auto-init/remote-hydration -- the dashboard's own preview instantiates
-  // SliderBit manually. But that same copy is reused as the "self-contained"
-  // embed's <script> body, and a pasted embed needs SOMETHING to actually
-  // build a slider on the page. Without this, a self-contained embed defines
-  // window.SliderBit and then does nothing: no arrows, no dots, no behavior --
-  // it just sits there as static, unstyled markup. This appends the same
-  // auto-init/tryWireSync/remote-hydration tail that the real sliderbit.js
-  // file already has, so self-contained embeds actually initialize.
   var ENGINE_AUTOINIT_SOURCE =
     "(function (global) {\n" +
     "  'use strict';\n" +
@@ -1511,9 +1532,6 @@
     "  global.SliderBit.initAll = initAll;\n" +
     "})(window);";
 
-  // Guidance shown in place of real slides -- Slider Bit doesn't host images,
-  // so the embed always needs the user to either hand-author slides with
-  // their own image URLs, or point the track at a CMS Collection List.
   var EXAMPLE_SLIDES_BLOCK =
     '    <!-- Replace this example with your own slides: one .slider-bit__slide per image -->\n' +
     '    <div class="slider-bit__slide"><img src="https://YOUR-SITE.webflow.io/path/to/image-1.jpg" alt=""></div>\n' +
@@ -1537,6 +1555,7 @@
     var config = currentConfig();
     var theme = currentTheme();
     var uid = 'sliderbit-' + Math.random().toString(36).slice(2, 8);
+    var type = typeById(selectedTypeId) || WIZARD_TYPES[0];
 
     var configAttr = opts.configId
       ? 'data-sliderbit-config-id="' + opts.configId + '"'
@@ -1547,10 +1566,9 @@
       '--sb-arrow-color:' + theme.arrowColor + ';' +
       '--sb-dot-color-active:' + theme.dotColorActive + ';' +
       '--sb-radius:' + theme.radius + 'px;' +
-      '}';
+      '}' + type.extraCss(uid);
 
-    var preset = activePresetId ? PRESETS[activePresetId] : null;
-    var needsNav = !!(preset && preset.nav);
+    var needsNav = !!type.nav;
     var navUid = uid + '-thumbs';
 
     var lines = [
@@ -1560,26 +1578,27 @@
       '<div class="slider-bit" id="' + uid + '" ' + configAttr + '>',
       '  <div class="slider-bit__track">',
       EXAMPLE_SLIDES_BLOCK,
-      '  </div>',
-      '</div>'
+      '  </div>'
     ];
+    if (type.counter) {
+      lines.push('  <!-- Optional progress counter ("01 — 06") -- purely opt-in, remove if unwanted -->');
+      lines.push('  <div data-sliderbit-counter class="sb-counter"></div>');
+    }
+    lines.push('</div>');
 
     if (needsNav) {
-      // The thumbnail strip's config is always inlined (not saved-by-ID),
-      // since the config-only backend stores a single {config,theme} pair --
-      // saving currently applies only to the main gallery above.
       var navThemeCss =
         '#' + navUid + '{' +
-        '--sb-arrow-color:' + preset.navTheme.arrowColor + ';' +
-        '--sb-dot-color-active:' + preset.navTheme.dotColorActive + ';' +
-        '--sb-radius:' + preset.navTheme.radius + 'px;' +
+        '--sb-arrow-color:' + type.navTheme.arrowColor + ';' +
+        '--sb-dot-color-active:' + type.navTheme.dotColorActive + ';' +
+        '--sb-radius:' + type.navTheme.radius + 'px;' +
         '}';
       lines[1] = '<style>' + themeCss + navThemeCss + '</style>';
       lines.push(
         '',
         '<!-- Thumbnail strip: synced to the gallery above via data-sliderbit-sync -->',
         '<div class="slider-bit" id="' + navUid + '" data-sliderbit-sync="#' + uid + '" data-sliderbit-nav ' +
-          'data-sliderbit-config=\'' + JSON.stringify(preset.navConfig) + '\'>',
+          'data-sliderbit-config=\'' + JSON.stringify(type.navConfig) + '\'>',
         '  <div class="slider-bit__track">',
         NAV_SLIDES_BLOCK,
         '  </div>',
@@ -1601,50 +1620,51 @@
     return lines.join('\n');
   }
 
-  function saveConfig() {
-    var payload = { config: currentConfig(), theme: currentTheme() };
-    if (currentConfigId) payload.id = currentConfigId;
-
-    return fetch(API_BASE + '/api/sliders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).then(function (res) {
-      if (!res.ok) {
-        return res.json().catch(function () { return {}; }).then(function (err) {
-          throw new Error(err.error || ('Save failed (HTTP ' + res.status + ')'));
-        });
-      }
-      return res.json();
-    }).then(function (data) {
-      currentConfigId = data.id;
-      return data.id;
-    });
-  }
-
-  /* ---------- Modal ---------- */
   function refreshEmbedOutput() {
     els.embedOutput.value = buildEmbedCode({ selfContained: showingSelfContained, configId: currentConfigId });
   }
-
-  els.openEmbed.addEventListener('click', function () {
-    els.modalBackdrop.classList.add('open');
-    showingSelfContained = false;
-    els.toggleEmbedMode.textContent = 'Use self-contained code instead';
-    if (currentConfigId) {
-      els.sliderIdValue.textContent = currentConfigId;
-      els.sliderIdNote.style.display = 'block';
-    } else {
-      els.sliderIdNote.style.display = 'none';
-    }
-    refreshEmbedOutput();
-  });
 
   els.toggleEmbedMode.addEventListener('click', function () {
     showingSelfContained = !showingSelfContained;
     els.toggleEmbedMode.textContent = showingSelfContained ? 'Use hosted embed instead' : 'Use self-contained code instead';
     refreshEmbedOutput();
   });
+
+  els.copyBtn.addEventListener('click', function () {
+    els.embedOutput.select();
+    var done = function () {
+      els.copyBtn.textContent = 'Copied!';
+      els.copyBtn.classList.add('copied');
+      setTimeout(function () {
+        els.copyBtn.textContent = 'Copy to clipboard';
+        els.copyBtn.classList.remove('copied');
+      }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(els.embedOutput.value).then(done).catch(function () {
+        document.execCommand('copy'); done();
+      });
+    } else {
+      document.execCommand('copy');
+      done();
+    }
+  });
+
+  function saveConfig() {
+    var payload = { config: currentConfig(), theme: currentTheme() };
+    if (currentConfigId) payload.id = currentConfigId;
+    return fetch(API_BASE + '/api/sliders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function (res) {
+      if (!res.ok) throw new Error('save failed (HTTP ' + res.status + ')');
+      return res.json();
+    }).then(function (data) {
+      currentConfigId = data.id;
+      return data.id;
+    });
+  }
 
   els.saveConfigBtn.addEventListener('click', function () {
     if (IS_FILE_PROTOCOL) {
@@ -1669,39 +1689,11 @@
     });
   });
 
-  els.closeModal.addEventListener('click', function () {
-    els.modalBackdrop.classList.remove('open');
-  });
-  els.modalBackdrop.addEventListener('click', function (e) {
-    if (e.target === els.modalBackdrop) els.modalBackdrop.classList.remove('open');
-  });
-  els.copyBtn.addEventListener('click', function () {
-    els.embedOutput.select();
-    var done = function () {
-      els.copyBtn.textContent = 'Copied!';
-      els.copyBtn.classList.add('copied');
-      setTimeout(function () {
-        els.copyBtn.textContent = 'Copy to clipboard';
-        els.copyBtn.classList.remove('copied');
-      }, 1500);
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(els.embedOutput.value).then(done).catch(function () {
-        document.execCommand('copy'); done();
-      });
-    } else {
-      document.execCommand('copy');
-      done();
-    }
-  });
-
-  /* ---------- Load a saved config ---------- */
   els.loadIdBtn.addEventListener('click', function () {
     var id = els.loadIdInput.value.trim();
     if (!id) return;
     els.loadIdBtn.textContent = 'Loading…';
     els.loadIdBtn.disabled = true;
-
     fetch(API_BASE + '/api/sliders/' + encodeURIComponent(id))
       .then(function (res) {
         if (!res.ok) throw new Error('not found (HTTP ' + res.status + ')');
@@ -1710,7 +1702,6 @@
       .then(function (data) {
         currentConfigId = id;
         applyConfigToControls(data.config, data.theme);
-        renderPreview();
         els.loadIdBtn.textContent = 'Loaded!';
         setTimeout(function () {
           els.loadIdBtn.textContent = 'Load';
@@ -1724,9 +1715,53 @@
       });
   });
 
+  /* ---------- Wizard navigation ---------- */
+  function goToStage(name) {
+    if (STAGES.indexOf(name) === -1) return;
+    currentStage = name;
+    document.querySelectorAll('.stage').forEach(function (section) {
+      section.classList.toggle('is-active', section.getAttribute('data-stage') === name);
+    });
+    var reachedIndex = STAGES.indexOf(name);
+    els.stepper.querySelectorAll('button[data-stage]').forEach(function (btn) {
+      var idx = STAGES.indexOf(btn.getAttribute('data-stage'));
+      btn.classList.toggle('is-active', idx === reachedIndex);
+      btn.classList.toggle('is-done', idx < reachedIndex);
+      btn.disabled = idx > reachedIndex;
+    });
+    if (name === 'preview') renderPreviewStage();
+    if (name === 'export') refreshEmbedOutput();
+    window.scrollTo(0, 0);
+  }
+
+  // Stepper: clicking an already-reached (enabled) step jumps back to it.
+  els.stepper.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-stage]');
+    if (!btn || btn.disabled) return;
+    goToStage(btn.getAttribute('data-stage'));
+  });
+
+  document.querySelectorAll('[data-back]').forEach(function (btn) {
+    btn.addEventListener('click', function () { goToStage(btn.getAttribute('data-back')); });
+  });
+  document.querySelectorAll('[data-continue]').forEach(function (btn) {
+    btn.addEventListener('click', function () { goToStage(btn.getAttribute('data-continue')); });
+  });
+
+  function resetWizard() {
+    selectedTypeId = null;
+    currentConfigId = null;
+    showingSelfContained = false;
+    els.toggleEmbedMode.textContent = 'Use self-contained code instead';
+    els.sliderIdNote.style.display = 'none';
+    goToStage('choose');
+  }
+  els.startOverLink.addEventListener('click', resetWizard);
+  els.startOverBtn.addEventListener('click', resetWizard);
+
   /* ---------- Init ---------- */
-  renderPresetButtons();
-  renderPreview();
+  renderTypeGrid();
+  goToStage('choose');
 })();
 </script>
 

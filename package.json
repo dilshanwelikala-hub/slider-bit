@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": "20.x"
+    "node": "24.x"
   },
   "description": "Slider Bit — configurable slider/carousel behavior engine for Webflow (and any site); bring your own images.",
   "dependencies": {

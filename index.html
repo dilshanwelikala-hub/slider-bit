@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Slider Bit — Webflow Embed Generator</title>
+<link rel="stylesheet" href="sliderbit.css">
 <style>
   :root {
     --page-a: #efe3d3;
@@ -41,9 +42,12 @@
     border-radius: 28px;
     box-shadow: var(--shadow-pop);
     overflow: hidden;
-    max-width: 1200px;
+    max-width: 1800px;
     margin: 0 auto;
     padding-bottom: 1rem;
+  }
+  @media (max-width: 640px) {
+    .app-shell { border-radius: 18px; }
   }
 
   header {
@@ -101,7 +105,8 @@
   .stepper button:disabled { cursor: not-allowed; opacity: 0.55; }
 
   /* ---------- Stages ---------- */
-  .stage { display: none; max-width: 900px; margin: 0 auto; padding: 0 1.75rem 1rem; }
+  .stage { display: none; max-width: 1100px; margin: 0 auto; padding: 0 1.75rem 1rem; }
+  .stage[data-stage="choose"] { max-width: 1700px; }
   .stage.is-active { display: block; }
   .stage-title { font-size: 1.15rem; font-weight: 700; margin: 0 0 0.3rem; }
   .stage-sub { color: var(--text-dim); font-size: 0.86rem; margin: 0 0 1.5rem; line-height: 1.5; }
@@ -162,6 +167,7 @@
 
   /* ---------- Stage 1: type picker ---------- */
   .type-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.25rem; }
+  @media (min-width: 1300px) { .type-grid { grid-template-columns: repeat(4, 1fr); } }
   @media (max-width: 720px) { .type-grid { grid-template-columns: 1fr; } }
   .type-card {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
@@ -270,7 +276,7 @@
 </ol>
 
 <!-- STAGE 1: choose a style -->
-<section class="stage is-active" data-stage="choose" style="max-width:1050px;">
+<section class="stage is-active" data-stage="choose">
   <p class="stage-title">Choose a carousel style</p>
   <p class="stage-sub">Each is a real, fully working carousel — try the arrows, drag it, watch it loop. Pick the one closest to what you want, then fine-tune everything on the next screen.</p>
   <div class="type-grid" id="type-grid"></div>

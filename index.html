@@ -356,6 +356,7 @@
           <input type="range" id="speed" min="150" max="1200" step="50" value="500">
         </div>
         <div class="row-check"><label for="loop">Loop</label><input type="checkbox" id="loop" checked></div>
+        <div class="row-check"><label for="continuous">Continuous auto-scroll (marquee)</label><input type="checkbox" id="continuous"></div>
         <div class="row-check"><label for="autoplay">Autoplay</label><input type="checkbox" id="autoplay"></div>
         <div class="field sub-field" id="interval-field" style="display:none;">
           <label>Interval (ms) <span id="interval-val">4000</span></label>
@@ -476,7 +477,7 @@
     easing: 'cubic-bezier(0.25, 1, 0.5, 1)', arrows: true, pagination: true,
     drag: true, dragFree: false, flickPower: 600, flickMaxPages: 1,
     wheel: false, wheelMinThreshold: 40, wheelSleep: 700,
-    keyboard: true, lazyLoad: true, startIndex: 0, breakpoints: {}
+    keyboard: true, lazyLoad: true, startIndex: 0, breakpoints: {}, continuous: false
   };
   var instanceId = 0;
   var FOCUSABLE_SELECTOR = 'a[href], button, input, select, textarea, [tabindex]';
@@ -498,6 +499,7 @@
     this.isFade = this.options.type === 'fade';
     this.isVertical = this.options.direction === 'vertical';
     this.isRTL = this.options.direction === 'rtl';
+    this.isContinuous = !!this.options.continuous && !this.isFade;
     this._autoplayTimer = null;
     this._dragging = false;
     this._locked = false;
@@ -511,7 +513,11 @@
     this._applyResponsive();
     this._bindEvents();
     this._render(false);
-    if (this.options.autoplay) this.play();
+    if (this.isContinuous) {
+      this._startContinuous();
+    } else if (this.options.autoplay) {
+      this.play();
+    }
   }
 
   SliderBit.prototype._build = function () {
@@ -524,6 +530,7 @@
     if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
     this.track.classList.add('slider-bit__track');
     if (this.isFade) this.track.classList.add('slider-bit__track--fade');
+    if (this.isContinuous) this.track.classList.add('slider-bit__track--marquee');
     if (this.options.drag) this.track.classList.add('slider-bit__track--draggable');
     this._buildClones();
     this.slides.forEach(function (slide, i) {
@@ -551,13 +558,13 @@
       this._onChange(updateCounter);
       updateCounter(this._realIndex());
     }
-    if (this.options.arrows && this.slides.length > 1) {
+    if (this.options.arrows && this.slides.length > 1 && !this.isContinuous) {
       this.prevBtn = this._createArrow('prev', '‹');
       this.nextBtn = this._createArrow('next', '›');
       el.appendChild(this.prevBtn);
       el.appendChild(this.nextBtn);
     }
-    if (this.options.pagination && this.slides.length > 1) {
+    if (this.options.pagination && this.slides.length > 1 && !this.isContinuous) {
       this.pagination = document.createElement('div');
       this.pagination.className = 'slider-bit__pagination';
       this.pagination.setAttribute('role', 'tablist');
@@ -581,6 +588,24 @@
   };
   SliderBit.prototype._buildClones = function () {
     var opts = this.options;
+    if (this.isContinuous) {
+      var real = this.slides.slice();
+      real.forEach(function (node, i) { node.__sbRealIndex = i; });
+      var track = this.track;
+      var dupes = real.map(function (node) {
+        var clone = node.cloneNode(true);
+        clone.classList.add('slider-bit__slide--clone');
+        clone.setAttribute('aria-hidden', 'true');
+        clone.removeAttribute('id');
+        return clone;
+      });
+      dupes.forEach(function (c) { track.appendChild(c); });
+      this.cloneCount = 0;
+      this.realCount = real.length;
+      this.slides = real.concat(dupes);
+      this.index = 0;
+      return;
+    }
     var eligible = opts.loop && opts.type !== 'fade' && this.slides.length > 1;
     if (!eligible) {
       this.cloneCount = 0;
@@ -679,7 +704,7 @@
   }
   SliderBit.prototype._bindEvents = function () {
     var self = this;
-    if (this.options.keyboard) {
+    if (this.options.keyboard && !this.isContinuous) {
       this.el.addEventListener('keydown', function (e) {
         var forwardKey = self.isVertical ? 'ArrowDown' : (self.isRTL ? 'ArrowLeft' : 'ArrowRight');
         var backwardKey = self.isVertical ? 'ArrowUp' : (self.isRTL ? 'ArrowRight' : 'ArrowLeft');
@@ -687,13 +712,20 @@
         if (e.key === backwardKey) self.prev();
       });
     }
-    if (this.options.pauseOnHover && this.options.autoplay) {
+    if (this.options.pauseOnHover && (this.options.autoplay || this.isContinuous)) {
       this.el.addEventListener('mouseenter', function () { self.pause(); });
       this.el.addEventListener('mouseleave', function () { self.play(); });
     }
-    if (this.options.drag) this._bindDrag();
-    if (this.options.wheel) this._bindWheel();
-    global.addEventListener('resize', debounce(function () { self._render(false); }, 150));
+    if (this.isContinuous) {
+      if (this.options.drag) this._bindContinuousDrag();
+    } else {
+      if (this.options.drag) this._bindDrag();
+      if (this.options.wheel) this._bindWheel();
+    }
+    global.addEventListener('resize', debounce(function () {
+      self._render(false);
+      if (self.isContinuous && self._marqueeMeasure) self._marqueeMeasure();
+    }, 150));
   };
   SliderBit.prototype._bindWheel = function () {
     var self = this;
@@ -783,6 +815,81 @@
     track.addEventListener('touchstart', pointerDown, { passive: true });
     track.addEventListener('touchmove', pointerMove, { passive: false });
     track.addEventListener('touchend', pointerUp);
+  };
+  SliderBit.prototype._bindContinuousDrag = function () {
+    var self = this;
+    var track = this.track;
+    var startPointer = 0, startOffset = 0, dragging = false;
+    function axisVal(e) { var p = e.touches ? e.touches[0] : e; return self.isVertical ? p.clientY : p.clientX; }
+    function wrap(v) {
+      var loop = self._marqueeLoopPx;
+      if (!loop) return v;
+      while (v <= -loop) v += loop;
+      while (v > 0) v -= loop;
+      return v;
+    }
+    function down(e) {
+      if (dragging) return;
+      dragging = true;
+      self._marqueeDragging = true;
+      startPointer = axisVal(e);
+      startOffset = self._marqueeOffset || 0;
+      track.classList.add('slider-bit__track--dragging');
+    }
+    function move(e) {
+      if (!dragging) return;
+      if (e.cancelable) e.preventDefault();
+      var delta = axisVal(e) - startPointer;
+      self._marqueeOffset = wrap(startOffset + delta);
+    }
+    function up() {
+      if (!dragging) return;
+      dragging = false;
+      self._marqueeDragging = false;
+      track.classList.remove('slider-bit__track--dragging');
+    }
+    track.addEventListener('mousedown', down);
+    global.addEventListener('mousemove', move);
+    global.addEventListener('mouseup', up);
+    track.addEventListener('touchstart', down, { passive: true });
+    track.addEventListener('touchmove', move, { passive: false });
+    track.addEventListener('touchend', up);
+  };
+  SliderBit.prototype._startContinuous = function () {
+    if (!this.isContinuous) return;
+    var self = this;
+    var reduceMotion = typeof global.matchMedia === 'function' &&
+      global.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this._marqueeOffset = 0;
+    this._marqueeRunning = !reduceMotion;
+    this._marqueeDragging = false;
+    this._marqueeLastTime = null;
+    this._marqueeLoopPx = 0;
+    function measure() {
+      self._marqueeLoopPx = (self.isVertical ? self.track.scrollHeight : self.track.scrollWidth) / 2 || 1;
+    }
+    this._marqueeMeasure = measure;
+    global.requestAnimationFrame(measure);
+    function tick(now) {
+      if (self._destroyed) return;
+      if (self._marqueeLastTime == null) self._marqueeLastTime = now;
+      var dt = now - self._marqueeLastTime;
+      self._marqueeLastTime = now;
+      if (self._marqueeRunning && !self._marqueeDragging && self._marqueeLoopPx > 0) {
+        var durationMs = Math.max(4000, (self.options.interval || 1800) * self.realCount);
+        var speed = self._marqueeLoopPx / durationMs;
+        var dir = self.isRTL ? 1 : -1;
+        var offset = self._marqueeOffset + dir * speed * dt;
+        var loop = self._marqueeLoopPx;
+        while (offset <= -loop) offset += loop;
+        while (offset > 0) offset -= loop;
+        self._marqueeOffset = offset;
+      }
+      var axis = self.isVertical ? 'Y' : 'X';
+      self.track.style.transform = 'translate' + axis + '(' + self._marqueeOffset + 'px)';
+      self._marqueeRaf = global.requestAnimationFrame(tick);
+    }
+    this._marqueeRaf = global.requestAnimationFrame(tick);
   };
   SliderBit.prototype.next = function () { this._moveTo(this.index + this._perMove(), true); };
   SliderBit.prototype.prev = function () { this._moveTo(this.index - this._perMove(), true); };
@@ -895,6 +1002,13 @@
   };
   SliderBit.prototype._render = function (animate) {
     var per = this.options.perPage || 1;
+    if (this.isContinuous) {
+      var contSlideSize = 100 / per;
+      this.slides.forEach(function (slide) {
+        slide.style.flex = '0 0 calc(' + contSlideSize + '% - (var(--sb-gap) * ' + (per - 1) + ' / ' + per + '))';
+      });
+      return;
+    }
     if (this.isFade) {
       this.slides.forEach(function (slide, i) {
         slide.style.transition = animate ? 'opacity var(--sb-speed) var(--sb-easing)' : 'none';
@@ -946,14 +1060,22 @@
     });
   };
   SliderBit.prototype.play = function () {
+    if (this.isContinuous) { this._marqueeRunning = true; return; }
     var self = this;
     this.pause();
     this._autoplayTimer = setInterval(function () { self.next(); }, this.options.interval || 4000);
   };
   SliderBit.prototype.pause = function () {
+    if (this.isContinuous) { this._marqueeRunning = false; return; }
     if (this._autoplayTimer) { clearInterval(this._autoplayTimer); this._autoplayTimer = null; }
   };
-  SliderBit.prototype.destroy = function () { this.pause(); clearTimeout(this._snapTimer); delete this.el.__sliderBitInstance; };
+  SliderBit.prototype.destroy = function () {
+    this.pause();
+    clearTimeout(this._snapTimer);
+    this._destroyed = true;
+    if (this._marqueeRaf) global.cancelAnimationFrame(this._marqueeRaf);
+    delete this.el.__sliderBitInstance;
+  };
   SliderBit.prototype.sync = function (other, opts) {
     opts = opts || {};
     var self = this;
@@ -1027,7 +1149,7 @@
   };
 
   var controlIds = ['perPage', 'gap', 'aspectRatio', 'direction', 'focusCenter', 'peek', 'padding', 'mobileOverride', 'mobilePerPage',
-    'type', 'speed', 'loop', 'autoplay',
+    'type', 'speed', 'loop', 'continuous', 'autoplay',
     'interval', 'pauseOnHover', 'drag', 'wheel', 'keyboard', 'arrows', 'pagination', 'arrowColor', 'dotColorActive', 'radius'];
   var controls = {};
   controlIds.forEach(function (id) { controls[id] = document.getElementById(id); });
@@ -1035,9 +1157,12 @@
   controls.mobileOverride.addEventListener('change', function () {
     document.getElementById('mobile-perPage-field').style.display = controls.mobileOverride.checked ? 'block' : 'none';
   });
-  controls.autoplay.addEventListener('change', function () {
-    document.getElementById('interval-field').style.display = controls.autoplay.checked ? 'block' : 'none';
-  });
+  function refreshIntervalFieldVisibility() {
+    document.getElementById('interval-field').style.display =
+      (controls.autoplay.checked || controls.continuous.checked) ? 'block' : 'none';
+  }
+  controls.autoplay.addEventListener('change', refreshIntervalFieldVisibility);
+  controls.continuous.addEventListener('change', refreshIntervalFieldVisibility);
   ['perPage', 'gap', 'speed', 'interval', 'radius', 'peek', 'padding', 'mobilePerPage'].forEach(function (id) {
     controls[id].addEventListener('input', function () {
       document.getElementById(id + '-val').textContent = controls[id].value;
@@ -1057,6 +1182,7 @@
       peek: Number(controls.peek.value),
       padding: Number(controls.padding.value) + 'px',
       loop: controls.loop.checked,
+      continuous: controls.continuous.checked,
       autoplay: controls.autoplay.checked,
       interval: Number(controls.interval.value),
       pauseOnHover: controls.pauseOnHover.checked,
@@ -1124,10 +1250,12 @@
       document.getElementById('mobilePerPage-val').textContent = 1;
     }
     if (typeof config.loop === 'boolean') controls.loop.checked = config.loop;
-    if (typeof config.autoplay === 'boolean') {
-      controls.autoplay.checked = config.autoplay;
-      document.getElementById('interval-field').style.display = config.autoplay ? 'block' : 'none';
-    }
+    // continuous isn't set by every type -- reset it explicitly (same convention as
+    // peek/padding/mobileOverride above) so it doesn't carry over from a previous pick.
+    controls.continuous.checked = config.continuous === true;
+    if (typeof config.autoplay === 'boolean') controls.autoplay.checked = config.autoplay;
+    document.getElementById('interval-field').style.display =
+      (controls.autoplay.checked || controls.continuous.checked) ? 'block' : 'none';
     if (config.interval != null) {
       controls.interval.value = config.interval;
       document.getElementById('interval-val').textContent = config.interval;
@@ -1283,9 +1411,9 @@
       label: 'Auto-Scroll Reel',
       hint: 'A row of compact cards that keeps crawling on its own and loops seamlessly — grab it anytime to drag through at your own pace. Great for logos, integrations, or feature highlights.',
       config: {
-        type: 'slide', direction: 'ltr', perPage: 4, perMove: 1, gap: '20px', aspectRatio: '3/1',
-        focus: false, loop: true, autoplay: true, interval: 1800, pauseOnHover: true,
-        speed: 900, arrows: false, pagination: false, drag: true, dragFree: true, wheel: false, keyboard: true
+        type: 'slide', direction: 'ltr', perPage: 4, gap: '20px', aspectRatio: '3/1',
+        continuous: true, autoplay: false, interval: 1800, pauseOnHover: true,
+        arrows: false, pagination: false, drag: true, wheel: false, keyboard: false
       },
       theme: { arrowColor: '#241f1a', dotColorActive: '#241f1a', radius: 16 },
       demoSlides: [
@@ -1457,6 +1585,7 @@
     '.slider-bit__track--fade{position:relative;display:block;aspect-ratio:var(--sb-aspect-ratio);}' +
     '.slider-bit__track--draggable{cursor:grab;}' +
     '.slider-bit__track--dragging{cursor:grabbing;}' +
+    '.slider-bit__track--marquee{will-change:transform;}' +
     '.slider-bit__slide{flex-shrink:0;position:relative;margin-right:var(--sb-gap);overflow:hidden;border-radius:var(--sb-radius);' +
     'transition:transform var(--sb-speed) var(--sb-easing),opacity var(--sb-speed) var(--sb-easing);}' +
     '.slider-bit__slide:last-child{margin-right:0;}' +

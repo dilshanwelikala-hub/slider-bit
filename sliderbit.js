@@ -56,7 +56,9 @@
     keyboard: true,
     lazyLoad: true,
     startIndex: 0,
-    breakpoints: {}          // { 768: { perPage: 1 }, 1024: { perPage: 3 } }
+    breakpoints: {},         // { 768: { perPage: 1 }, 1024: { perPage: 3 } }
+    continuous: false        // true = seamless auto-scrolling marquee (no discrete pages/steps);
+                              // "interval" is repurposed as ms-per-slide of constant travel speed
   };
 
   var instanceId = 0;
@@ -83,6 +85,10 @@
     this.isFade = this.options.type === 'fade';
     this.isVertical = this.options.direction === 'vertical';
     this.isRTL = this.options.direction === 'rtl';
+    // "continuous" is a seamless, always-auto-scrolling marquee mode -- an
+    // entirely different rendering path from the discrete page-by-page
+    // engine below (see _startContinuous). Not supported for fade.
+    this.isContinuous = !!this.options.continuous && !this.isFade;
     this._autoplayTimer = null;
     this._dragging = false;
     this._locked = false;
@@ -101,7 +107,11 @@
     this._applyResponsive();
     this._bindEvents();
     this._render(false);
-    if (this.options.autoplay) this.play();
+    if (this.isContinuous) {
+      this._startContinuous();
+    } else if (this.options.autoplay) {
+      this.play();
+    }
   }
 
   // -------------------------------------------------------------------
@@ -119,6 +129,7 @@
 
     this.track.classList.add('slider-bit__track');
     if (this.isFade) this.track.classList.add('slider-bit__track--fade');
+    if (this.isContinuous) this.track.classList.add('slider-bit__track--marquee');
     if (this.options.drag) this.track.classList.add('slider-bit__track--draggable');
 
     this._buildClones();
@@ -158,16 +169,16 @@
       updateCounter(this._realIndex());
     }
 
-    // Arrows
-    if (this.options.arrows && this.slides.length > 1) {
+    // Arrows -- not meaningful for a continuous marquee (no discrete pages to step through)
+    if (this.options.arrows && this.slides.length > 1 && !this.isContinuous) {
       this.prevBtn = this._createArrow('prev', '‹');
       this.nextBtn = this._createArrow('next', '›');
       el.appendChild(this.prevBtn);
       el.appendChild(this.nextBtn);
     }
 
-    // Pagination
-    if (this.options.pagination && this.slides.length > 1) {
+    // Pagination -- same reasoning as arrows above
+    if (this.options.pagination && this.slides.length > 1 && !this.isContinuous) {
       this.pagination = document.createElement('div');
       this.pagination.className = 'slider-bit__pagination';
       this.pagination.setAttribute('role', 'tablist');
@@ -207,6 +218,29 @@
    */
   SliderBit.prototype._buildClones = function () {
     var opts = this.options;
+
+    if (this.isContinuous) {
+      // A continuous marquee doesn't page through an index -- it just keeps
+      // translating the track at a constant speed. The simplest way to make
+      // that seamless regardless of content length is the standard marquee
+      // trick: duplicate the real slides exactly ONCE so the track holds two
+      // back-to-back identical copies, then loop the translate distance at
+      // precisely half the track's total width. At that halfway point the
+      // second (duplicate) copy is pixel-identical to where the first copy
+      // started, so the loop restart is invisible -- no snap-back, no pause,
+      // no visible "jump" the way the discrete clone-buffer below has.
+      var real = this.slides.slice();
+      real.forEach(function (node, i) { node.__sbRealIndex = i; });
+      var track = this.track;
+      var dupes = real.map(function (node) { return cloneNode(node, -1); });
+      dupes.forEach(function (c) { track.appendChild(c); });
+      this.cloneCount = 0;
+      this.realCount = real.length;
+      this.slides = real.concat(dupes);
+      this.index = 0;
+      return;
+    }
+
     var eligible = opts.loop && opts.type !== 'fade' && this.slides.length > 1;
 
     if (!eligible) {
@@ -338,7 +372,11 @@
   SliderBit.prototype._bindEvents = function () {
     var self = this;
 
-    if (this.options.keyboard) {
+    // Discrete keyboard paging and wheel-to-page don't have an obvious
+    // "correct" behavior against a freeform continuous scroll, so both are
+    // simply not wired up in that mode (matches most real marquee sites,
+    // which don't support arrow-key paging either).
+    if (this.options.keyboard && !this.isContinuous) {
       this.el.addEventListener('keydown', function (e) {
         var forwardKey = self.isVertical ? 'ArrowDown' : (self.isRTL ? 'ArrowLeft' : 'ArrowRight');
         var backwardKey = self.isVertical ? 'ArrowUp' : (self.isRTL ? 'ArrowRight' : 'ArrowLeft');
@@ -347,20 +385,22 @@
       });
     }
 
-    if (this.options.pauseOnHover && this.options.autoplay) {
+    if (this.options.pauseOnHover && (this.options.autoplay || this.isContinuous)) {
       this.el.addEventListener('mouseenter', function () { self.pause(); });
       this.el.addEventListener('mouseleave', function () { self.play(); });
     }
 
-    if (this.options.drag) {
-      this._bindDrag();
+    if (this.isContinuous) {
+      if (this.options.drag) this._bindContinuousDrag();
+    } else {
+      if (this.options.drag) this._bindDrag();
+      if (this.options.wheel) this._bindWheel();
     }
 
-    if (this.options.wheel) {
-      this._bindWheel();
-    }
-
-    global.addEventListener('resize', debounce(function () { self._render(false); }, 150));
+    global.addEventListener('resize', debounce(function () {
+      self._render(false);
+      if (self.isContinuous && self._marqueeMeasure) self._marqueeMeasure();
+    }, 150));
   };
 
   SliderBit.prototype._bindWheel = function () {
@@ -492,6 +532,113 @@
     track.addEventListener('touchstart', pointerDown, { passive: true });
     track.addEventListener('touchmove', pointerMove, { passive: false });
     track.addEventListener('touchend', pointerUp);
+  };
+
+  /**
+   * Drag handling for continuous (marquee) mode. Unlike _bindDrag above,
+   * there's no discrete slide index to reason about -- dragging just reads
+   * and writes the same `_marqueeOffset` pixel value that the animation
+   * ticker (_startContinuous) advances on its own, so a grab-and-release
+   * always continues smoothly from wherever the user left it.
+   */
+  SliderBit.prototype._bindContinuousDrag = function () {
+    var self = this;
+    var track = this.track;
+    var startPointer = 0, startOffset = 0, dragging = false;
+
+    function axisVal(e) {
+      var p = e.touches ? e.touches[0] : e;
+      return self.isVertical ? p.clientY : p.clientX;
+    }
+    function wrap(v) {
+      var loop = self._marqueeLoopPx;
+      if (!loop) return v;
+      while (v <= -loop) v += loop;
+      while (v > 0) v -= loop;
+      return v;
+    }
+
+    function down(e) {
+      if (dragging) return;
+      dragging = true;
+      self._marqueeDragging = true;
+      startPointer = axisVal(e);
+      startOffset = self._marqueeOffset || 0;
+      track.classList.add('slider-bit__track--dragging');
+    }
+    function move(e) {
+      if (!dragging) return;
+      if (e.cancelable) e.preventDefault();
+      var delta = axisVal(e) - startPointer;
+      self._marqueeOffset = wrap(startOffset + delta);
+    }
+    function up() {
+      if (!dragging) return;
+      dragging = false;
+      self._marqueeDragging = false;
+      track.classList.remove('slider-bit__track--dragging');
+    }
+
+    track.addEventListener('mousedown', down);
+    global.addEventListener('mousemove', move);
+    global.addEventListener('mouseup', up);
+    track.addEventListener('touchstart', down, { passive: true });
+    track.addEventListener('touchmove', move, { passive: false });
+    track.addEventListener('touchend', up);
+  };
+
+  /**
+   * Drives the seamless continuous marquee: a requestAnimationFrame loop
+   * that advances `_marqueeOffset` at a constant px/ms speed (derived from
+   * `interval`, repurposed here as "ms to travel one slide's width") and
+   * writes it straight to the track's transform every frame. Wrapping at
+   * `_marqueeLoopPx` (half the track's total width, i.e. exactly one real
+   * loop -- see _buildClones) is what makes the restart invisible: past
+   * that point the duplicated content is pixel-identical to where playback
+   * started. Pausing (hover or drag) just stops advancing the offset; the
+   * transform write still happens every frame so a drag can move it freely.
+   */
+  SliderBit.prototype._startContinuous = function () {
+    if (!this.isContinuous) return;
+    var self = this;
+    var reduceMotion = typeof global.matchMedia === 'function' &&
+      global.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this._marqueeOffset = 0;
+    this._marqueeRunning = !reduceMotion; // still draggable, just doesn't auto-scroll on its own
+    this._marqueeDragging = false;
+    this._marqueeLastTime = null;
+    this._marqueeLoopPx = 0;
+
+    function measure() {
+      // The track holds exactly two back-to-back copies of the real slides
+      // (see _buildClones), so half its scrollWidth is the width of one loop.
+      self._marqueeLoopPx = (self.isVertical ? self.track.scrollHeight : self.track.scrollWidth) / 2 || 1;
+    }
+    this._marqueeMeasure = measure;
+    global.requestAnimationFrame(measure);
+
+    function tick(now) {
+      if (self._destroyed) return;
+      if (self._marqueeLastTime == null) self._marqueeLastTime = now;
+      var dt = now - self._marqueeLastTime;
+      self._marqueeLastTime = now;
+
+      if (self._marqueeRunning && !self._marqueeDragging && self._marqueeLoopPx > 0) {
+        var durationMs = Math.max(4000, (self.options.interval || 1800) * self.realCount);
+        var speed = self._marqueeLoopPx / durationMs; // px per ms
+        var dir = self.isRTL ? 1 : -1;
+        var offset = self._marqueeOffset + dir * speed * dt;
+        var loop = self._marqueeLoopPx;
+        while (offset <= -loop) offset += loop;
+        while (offset > 0) offset -= loop;
+        self._marqueeOffset = offset;
+      }
+
+      var axis = self.isVertical ? 'Y' : 'X';
+      self.track.style.transform = 'translate' + axis + '(' + self._marqueeOffset + 'px)';
+      self._marqueeRaf = global.requestAnimationFrame(tick);
+    }
+    this._marqueeRaf = global.requestAnimationFrame(tick);
   };
 
   // -------------------------------------------------------------------
@@ -696,6 +843,17 @@
   SliderBit.prototype._render = function (animate) {
     var per = this.options.perPage || 1;
 
+    if (this.isContinuous) {
+      // Still size the slides responsively via flex-basis, but positioning
+      // is owned entirely by the requestAnimationFrame ticker in
+      // _startContinuous -- no discrete index, pagination, or arrows apply.
+      var contSlideSize = 100 / per;
+      this.slides.forEach(function (slide) {
+        slide.style.flex = '0 0 calc(' + contSlideSize + '% - (var(--sb-gap) * ' + (per - 1) + ' / ' + per + '))';
+      });
+      return;
+    }
+
     if (this.isFade) {
       this.slides.forEach(function (slide, i) {
         slide.style.transition = animate ? 'opacity var(--sb-speed) var(--sb-easing)' : 'none';
@@ -767,12 +925,14 @@
   };
 
   SliderBit.prototype.play = function () {
+    if (this.isContinuous) { this._marqueeRunning = true; return; }
     var self = this;
     this.pause();
     this._autoplayTimer = setInterval(function () { self.next(); }, this.options.interval || 4000);
   };
 
   SliderBit.prototype.pause = function () {
+    if (this.isContinuous) { this._marqueeRunning = false; return; }
     if (this._autoplayTimer) {
       clearInterval(this._autoplayTimer);
       this._autoplayTimer = null;
@@ -782,6 +942,8 @@
   SliderBit.prototype.destroy = function () {
     this.pause();
     clearTimeout(this._snapTimer);
+    this._destroyed = true;
+    if (this._marqueeRaf) global.cancelAnimationFrame(this._marqueeRaf);
     delete this.el.__sliderBitInstance;
   };
 

@@ -58,6 +58,13 @@
   cursor: grabbing;
 }
 
+/* Continuous marquee mode: transform is written every animation frame by
+   JS, not driven by a CSS transition, so no transition rule is needed here
+   -- will-change is just a perf hint for the browser's compositor. */
+.slider-bit__track--marquee {
+  will-change: transform;
+}
+
 .slider-bit__slide {
   flex-shrink: 0;
   position: relative;

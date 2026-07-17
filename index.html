@@ -687,6 +687,16 @@
       var perPageChanged = merged.perPage !== self.options.perPage;
       self.options = merged;
       self.isFade = self.options.type === 'fade';
+      // _build() only sets these CSS custom properties once at construction time --
+      // without re-applying them here, a breakpoint override for aspectRatio/height/
+      // gap/peek/padding would be silently ignored (only perPage actually took effect).
+      if (self.options.height) self.el.style.setProperty('--sb-height', self.options.height);
+      else if (self.options.aspectRatio) self.el.style.setProperty('--sb-aspect-ratio', self.options.aspectRatio);
+      self.el.style.setProperty('--sb-gap', self._toCss(self.options.gap));
+      self.el.style.setProperty('--sb-padding', self._toCss(self.options.padding));
+      var peek = self._resolvePeek();
+      self.el.style.setProperty('--sb-peek-start', self._toCss(peek.start));
+      self.el.style.setProperty('--sb-peek-end', self._toCss(peek.end));
       if (perPageChanged) self._buildPagination();
       self._render(false);
     }
@@ -1308,7 +1318,12 @@
       navConfig: {
         type: 'slide', direction: 'ltr', perPage: 6, perMove: 1, gap: '8px', aspectRatio: '2/3',
         focus: false, loop: false, autoplay: false, pauseOnHover: false,
-        speed: 300, arrows: false, pagination: false, drag: true, wheel: false, keyboard: false, lazyLoad: true
+        speed: 300, arrows: false, pagination: false, drag: true, wheel: false, keyboard: false, lazyLoad: true,
+        // Six thumbnails at once is too cramped to tap accurately on a phone-width
+        // screen; this bypasses the Customize stage entirely (navConfig is baked
+        // straight into the exported nav strip, never bound to the mobile-override
+        // checkbox), so there's no risk of the Customize round-trip losing it.
+        breakpoints: { 768: { perPage: 4 } }
       },
       navTheme: { arrowColor: '#ffffff', dotColorActive: '#ffffff', radius: 6 },
       demoSlides: [
@@ -1334,7 +1349,12 @@
       config: {
         type: 'slide', direction: 'ltr', perPage: 3, gap: '24px', aspectRatio: '3/4',
         focus: 'center', peek: 40, loop: true, autoplay: true, interval: 4500, pauseOnHover: true,
-        speed: 600, arrows: true, pagination: true, drag: true, wheel: false, keyboard: true
+        speed: 600, arrows: true, pagination: true, drag: true, wheel: false, keyboard: true,
+        // 3-per-page is too cramped on a phone-width screen; drop to a single centered
+        // card below 768px. Safe to round-trip through the Customize stage since it's
+        // a plain perPage override -- the same shape the "Different layout on mobile"
+        // checkbox already produces.
+        breakpoints: { 768: { perPage: 1 } }
       },
       theme: { arrowColor: '#ffffff', dotColorActive: '#ffffff', radius: 16 },
       demoSlides: [
@@ -1375,7 +1395,15 @@
         return '<img src="' + s.img + '" alt="' + s.headline + '">' +
           '<div class="sb-hero-kicker">' + s.kicker + '</div><div class="sb-hero-headline">' + s.headline + '</div>';
       },
-      extraCss: function () { return ''; }
+      extraCss: function (uid) {
+        // A pure CSS media query, not a breakpoints override -- deliberately sidesteps
+        // the Customize stage entirely (which only round-trips a perPage override, see
+        // the mobile-override checkbox/slider), so this survives Choose -> Customize ->
+        // Preview -> Export intact no matter what the user touches on the Customize screen.
+        // 21:9 gets too short below ~480px for the kicker+headline overlay text to fit
+        // without crowding or clipping, so fall back to a taller ratio there.
+        return '@media (max-width: 480px) { #' + uid + ' { --sb-aspect-ratio: 4/3; } }';
+      }
     },
     {
       id: 'tilt3d',
@@ -1384,7 +1412,12 @@
       config: {
         type: 'slide', direction: 'ltr', perPage: 3, gap: '20px', aspectRatio: '4/5',
         focus: 'center', peek: 20, loop: true, autoplay: false, interval: 4000, pauseOnHover: true,
-        speed: 550, arrows: true, pagination: false, drag: true, wheel: false, keyboard: true
+        speed: 550, arrows: true, pagination: false, drag: true, wheel: false, keyboard: true,
+        // 3-per-page leaves each card too small to read the 3D tilt on a phone screen;
+        // drop to a single centered card below 768px (the tilt itself only shows once
+        // neighbors are in view, so it naturally steps back at this size -- a standard
+        // carousel tradeoff rather than a bug).
+        breakpoints: { 768: { perPage: 1 } }
       },
       theme: { arrowColor: '#1a1a1a', dotColorActive: '#1a1a1a', radius: 14 },
       demoSlides: [
@@ -1416,7 +1449,12 @@
       config: {
         type: 'slide', direction: 'ltr', perPage: 4, gap: '20px', aspectRatio: '3/1',
         continuous: true, autoplay: false, interval: 1800, pauseOnHover: true,
-        arrows: false, pagination: false, drag: true, wheel: false, keyboard: false
+        arrows: false, pagination: false, drag: true, wheel: false, keyboard: false,
+        // 4-per-page shrinks each card's title/description to unreadable on a phone
+        // screen; 2-per-page keeps the reel's continuous-motion feel legible. The
+        // continuous engine mode already re-reads perPage on every _render(), so this
+        // responds correctly through a breakpoint change same as any other preset.
+        breakpoints: { 768: { perPage: 2 } }
       },
       theme: { arrowColor: '#241f1a', dotColorActive: '#241f1a', radius: 16 },
       demoSlides: [
@@ -1502,12 +1540,15 @@
         // transform swing on top (perspective + rotateY) so the outgoing slide spins
         // away to one side while the incoming one spins in from the other, instead of
         // a flat crossfade.
+        // Same reasoning as Hero Statement's fallback above: a plain CSS media query,
+        // not a breakpoints override, so it can't be lost through the Customize stage.
         return '#' + uid + ' .slider-bit__track{perspective:1400px;}' +
           '#' + uid + ' .slider-bit__slide{transform:none;}' +
           '#' + uid + ' .slider-bit__slide--prev{transform:translateX(-6%) rotateY(-25deg) scale(.94);' +
           'transform-origin:left center;}' +
           '#' + uid + ' .slider-bit__slide--next{transform:translateX(6%) rotateY(25deg) scale(.94);' +
-          'transform-origin:right center;}';
+          'transform-origin:right center;}' +
+          '@media (max-width: 480px) { #' + uid + ' { --sb-aspect-ratio: 4/3; } }';
       }
     }
   ];

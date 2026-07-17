@@ -343,6 +343,19 @@
       var perPageChanged = merged.perPage !== self.options.perPage;
       self.options = merged;
       self.isFade = self.options.type === 'fade';
+      // _build() only sets these CSS custom properties once at construction time --
+      // without re-applying them here, a breakpoint override for aspectRatio/height/
+      // gap/peek/padding would be silently ignored (only perPage actually took effect).
+      if (self.options.height) {
+        self.el.style.setProperty('--sb-height', self.options.height);
+      } else if (self.options.aspectRatio) {
+        self.el.style.setProperty('--sb-aspect-ratio', self.options.aspectRatio);
+      }
+      self.el.style.setProperty('--sb-gap', self._toCss(self.options.gap));
+      self.el.style.setProperty('--sb-padding', self._toCss(self.options.padding));
+      var peek = self._resolvePeek();
+      self.el.style.setProperty('--sb-peek-start', self._toCss(peek.start));
+      self.el.style.setProperty('--sb-peek-end', self._toCss(peek.end));
       if (perPageChanged) {
         self._buildPagination();
       }

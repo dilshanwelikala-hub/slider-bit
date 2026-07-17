@@ -856,7 +856,10 @@
 
     if (this.isFade) {
       this.slides.forEach(function (slide, i) {
-        slide.style.transition = animate ? 'opacity var(--sb-speed) var(--sb-easing)' : 'none';
+        // Includes transform alongside opacity so fade-mode presets that layer on
+        // a custom transform via extraCss (stacked cards, 3D spin transitions, etc.)
+        // animate smoothly instead of snapping instantly between positions.
+        slide.style.transition = animate ? 'opacity var(--sb-speed) var(--sb-easing), transform var(--sb-speed) var(--sb-easing)' : 'none';
         slide.style.opacity = i === this.index ? '1' : '0';
         slide.style.zIndex = i === this.index ? '1' : '0';
       }, this);

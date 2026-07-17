@@ -1011,7 +1011,10 @@
     }
     if (this.isFade) {
       this.slides.forEach(function (slide, i) {
-        slide.style.transition = animate ? 'opacity var(--sb-speed) var(--sb-easing)' : 'none';
+        // Includes transform alongside opacity so fade-mode presets that layer on
+        // a custom transform via extraCss (stacked cards, 3D spin transitions, etc.)
+        // animate smoothly instead of snapping instantly between positions.
+        slide.style.transition = animate ? 'opacity var(--sb-speed) var(--sb-easing), transform var(--sb-speed) var(--sb-easing)' : 'none';
         slide.style.opacity = i === this.index ? '1' : '0';
         slide.style.zIndex = i === this.index ? '1' : '0';
       }, this);
@@ -1434,6 +1437,77 @@
           '#' + uid + ' .slider-bit__slide{background:#ffffff;border:1px solid rgba(59,47,33,0.09);' +
           'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;' +
           'padding:1.25rem 1rem;box-sizing:border-box;}';
+      }
+    },
+    {
+      id: 'stack',
+      label: 'Stacking Slider',
+      hint: 'A tactile deck of stacked photos — the front card peels away to the next one behind it, with the rest fanned out underneath.',
+      config: {
+        type: 'fade', direction: 'ltr', perPage: 1, gap: '0px', aspectRatio: '1/1',
+        loop: true, autoplay: true, interval: 3200, pauseOnHover: true,
+        speed: 550, arrows: true, pagination: false, drag: false, wheel: false, keyboard: true
+      },
+      theme: { arrowColor: '#ffffff', dotColorActive: '#ffffff', radius: 18 },
+      demoSlides: [
+        { img: 'https://picsum.photos/id/1027/900/900', title: 'Lakeside' },
+        { img: 'https://picsum.photos/id/1031/900/900', title: 'Rooftop' },
+        { img: 'https://picsum.photos/id/1033/900/900', title: 'Overlook' },
+        { img: 'https://picsum.photos/id/1036/900/900', title: 'Treeline' },
+        { img: 'https://picsum.photos/id/1059/900/900', title: 'Harborside' }
+      ],
+      slideHtml: function (s) {
+        return '<img src="' + s.img + '" alt="' + s.title + '">';
+      },
+      extraCss: function (uid) {
+        // Fade mode already handles opacity (current=1, others=0) via inline style;
+        // !important is needed here so every card in the deck stays visible and the
+        // transform below (not opacity) is what expresses "front of stack" vs "buried
+        // behind it". Base rule = deepest/most-buried card look; --next peeks out more
+        // prominently as the upcoming card; --current sits flush on top. Anything that
+        // isn't current/next (i.e. already-shown cards) falls back to the buried base
+        // look, which reads correctly as "dealt back into the pile".
+        return '#' + uid + ' .slider-bit__slide{opacity:1 !important;' +
+          'transform:translate(22px,22px) scale(.82) rotate(-6deg);z-index:1;' +
+          'box-shadow:0 14px 30px -10px rgba(0,0,0,0.4);}' +
+          '#' + uid + ' .slider-bit__slide--next{transform:translate(11px,11px) scale(.91) rotate(-3deg);' +
+          'z-index:2;box-shadow:0 18px 36px -10px rgba(0,0,0,0.4);}' +
+          '#' + uid + ' .slider-bit__slide--current{transform:translate(0,0) scale(1) rotate(0deg);' +
+          'z-index:3;box-shadow:0 24px 48px -12px rgba(0,0,0,0.45);}';
+      }
+    },
+    {
+      id: 'snap3d',
+      label: 'Scroll Snap Slides',
+      hint: 'Full-bleed slides that snap crisply into place with a subtle 3D spin as each one swings in — scroll with your wheel or use the arrows.',
+      config: {
+        type: 'fade', direction: 'ltr', perPage: 1, gap: '0px', aspectRatio: '21/9',
+        loop: true, autoplay: true, interval: 4200, pauseOnHover: true,
+        speed: 650, arrows: true, pagination: true, drag: false, wheel: true, keyboard: true
+      },
+      theme: { arrowColor: '#ffffff', dotColorActive: '#ffffff', radius: 0 },
+      demoSlides: [
+        { img: 'https://picsum.photos/id/1042/1600/686', kicker: 'Frame One', headline: 'DRIFT FORWARD' },
+        { img: 'https://picsum.photos/id/1045/1600/686', kicker: 'Frame Two', headline: 'SPIN THROUGH' },
+        { img: 'https://picsum.photos/id/1049/1600/686', kicker: 'Frame Three', headline: 'GLIDE PAST' },
+        { img: 'https://picsum.photos/id/1051/1600/686', kicker: 'Frame Four', headline: 'CARRY ON' }
+      ],
+      slideHtml: function (s) {
+        return '<img src="' + s.img + '" alt="' + s.headline + '">' +
+          '<div class="sb-hero-kicker">' + s.kicker + '</div><div class="sb-hero-headline">' + s.headline + '</div>';
+      },
+      extraCss: function (uid) {
+        // Fade mode's built-in opacity crossfade already handles the "old slide fades
+        // out / new slide fades in" half of the transition; this layers a matching
+        // transform swing on top (perspective + rotateY) so the outgoing slide spins
+        // away to one side while the incoming one spins in from the other, instead of
+        // a flat crossfade.
+        return '#' + uid + ' .slider-bit__track{perspective:1400px;}' +
+          '#' + uid + ' .slider-bit__slide{transform:none;}' +
+          '#' + uid + ' .slider-bit__slide--prev{transform:translateX(-6%) rotateY(-25deg) scale(.94);' +
+          'transform-origin:left center;}' +
+          '#' + uid + ' .slider-bit__slide--next{transform:translateX(6%) rotateY(25deg) scale(.94);' +
+          'transform-origin:right center;}';
       }
     }
   ];
